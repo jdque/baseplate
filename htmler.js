@@ -23,7 +23,7 @@
 		//closing tag
 		if (tag.indexOf("/") === 0) {
 			if (this.elemStack.length === 0) {
-				return null;
+				throw new Error("No matching opening tag for: " + tag);
 			}
 			else if (this.elemStack.length === 1) {
 				return this.elemStack[0];
