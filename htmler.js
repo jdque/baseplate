@@ -88,6 +88,18 @@
 		};
 	}
 
+	function promise (buildFunc) {
+		return function (parent) {
+			var placeholderElement = document.createElement('_placeholder');
+			parent.appendChild(placeholderElement);
+
+			var doneFunc = function (element) {
+				parent.replaceChild(element, placeholderElement);
+			};
+			buildFunc(doneFunc);
+		}
+	}
+
 	function repeat (list, buildFunc) {
 		return function (parent) {
 			for (var i = 0; i < list.length; i++) {
@@ -103,7 +115,7 @@
 			var currentVal = ref.obj[ref.prop];
 			if (currentVal !== ref.val) {
 				if (ref.func) {
-					ref.target.textContent = ref.func(ref.val, currentVal, ref.target);
+					ref.target.textContent = ref.func(currentVal, ref.val, ref.target);
 				}
 				else {
 					ref.target.textContent = currentVal;
@@ -124,6 +136,7 @@
 
 	target.htmler = htmler;
 	target.custom = custom;
+	target.promise = promise;
 	target.repeat = repeat;
 	target.obs = obs;
 })(window);
@@ -204,6 +217,17 @@ window.onload = function () {
 		}))
 		('br /')
 		('br /')
+		(promise(function (done) {
+			window.setTimeout(function () {
+				var z = document.createElement('div');
+				z.style.width = '64px';
+				z.style.height = '64px';
+				z.style.backgroundColor = 'red';
+				done(z);
+			}, 2000);
+		}))
+		('br /')
+		('br /')
 		('span', {style: {'font-size': '32px'}})
 			('text', obs(counter, 'value'))
 		('/span')
@@ -220,7 +244,7 @@ window.onload = function () {
 		('br /')
 		('br /')
 		('span')
-			('text', obs(input, 'value', function (oldVal, newVal, target) {
+			('text', obs(input, 'value', function (newVal, oldVal, target) {
 				if (newVal === "hello") {
 					target.style.color = "red";
 				}
