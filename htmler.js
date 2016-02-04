@@ -20,6 +20,12 @@
 			return this.selfFunc;
 		}
 
+		//clone pre-built element if tag argument is a reference
+		if (typeof tag === 'object') {
+			this.getCurrentElem().appendChild(tag.cloneNode(true));
+			return this.selfFunc;
+		}
+
 		//closing tag
 		if (tag.indexOf("/") === 0) {
 			if (this.elemStack.length === 0) {
@@ -77,8 +83,11 @@
 		}
 	}
 
-	function htmler(tag, attrs) {
-		updateObservers();
+	function htmler() {
+		if (!isObserving) {
+			isObserving = true;
+			updateObservers();
+		}
 		return new Htmler();
 	}
 
@@ -108,10 +117,12 @@
 		};
 	}
 
-	var observers = []
+	var isObserving = false;
+	var propObservers = [];
+	var listObservers = [];
 	var updateObservers = function () {
-		for (var i = 0 ; i < observers.length; i++) {
-			var ref = observers[i];
+		for (var i = 0 ; i < propObservers.length; i++) {
+			var ref = propObservers[i];
 			var currentVal = ref.obj[ref.prop];
 			if (currentVal !== ref.val) {
 				if (ref.func) {
@@ -123,14 +134,39 @@
 				ref.val = currentVal;
 			}
 		}
+
+		for (var i = 0 ; i < listObservers.length; i++) {
+			var ref = listObservers[i];
+			if (ref.list.length > ref.count) {
+				for (var j = ref.count; j < ref.list.length; j++) {
+					ref.target.appendChild(ref.buildFunc(ref.list[j], j));
+				}
+			}
+			else if (ref.list.length < ref.count) {
+				for (var j = ref.count; j > ref.list.length; j--) {
+					ref.target.removeChild(ref.target.lastChild);
+				}
+			}
+			ref.count = ref.list.length;
+		}
+
 		window.requestAnimationFrame(updateObservers);
 	}
 
 	function obs (obj, prop, _func) {
 		_func = typeof _func === 'function' ? _func : null;
 		return function (target) {
-			observers.push({obj: obj, prop: prop, val: obj.prop, target: target, func: _func});
+			propObservers.push({obj: obj, prop: prop, val: obj.prop, target: target, func: _func});
 			return obj.prop;
+		}
+	}
+
+	function repeat_obs (list, buildFunc) {
+		return function (target) {
+			listObservers.push({list: list, count: list.length, target: target, buildFunc: buildFunc});
+			for (var i = 0; i < list.length; i++) {
+				target.appendChild(buildFunc(list[i], i));
+			}
 		}
 	}
 
@@ -139,6 +175,7 @@
 	target.promise = promise;
 	target.repeat = repeat;
 	target.obs = obs;
+	target.repeat_obs = repeat_obs;
 })(window);
 
 window.onload = function () {
@@ -154,6 +191,8 @@ window.onload = function () {
 	var input = {
 		value: ""
 	};
+
+	var inputList = ["first", "second"];
 
 	var list = [
 		{
@@ -171,15 +210,18 @@ window.onload = function () {
 	];
 
 	var styles = {
-		container: {'border': '2px solid black', 'width': '480px', 'height': '640px'},
+		container: {'border': '2px solid black', 'width': '480px', 'padding': '8px'},
 		child: {'background-color': '#0000FF', 'width': '64px', 'height': '64px'},
 		bold: {'font-weight': 'bold'}
 	};
 
+	var box = htmler()
+	('div', {style: styles.child})
+	('/div')
+
 	var stuff = htmler()
 	('div', {id: 'container1', style: styles.container})
-		('div', {style: styles.child})
-		('/div')
+		(box)
 		('span')
 			('text', data.name)
 		('/span')
@@ -219,11 +261,7 @@ window.onload = function () {
 		('br /')
 		(promise(function (done) {
 			window.setTimeout(function () {
-				var z = document.createElement('div');
-				z.style.width = '64px';
-				z.style.height = '64px';
-				z.style.backgroundColor = 'red';
-				done(z);
+				done(box);
 			}, 2000);
 		}))
 		('br /')
@@ -236,6 +274,11 @@ window.onload = function () {
 		('input', {
 			onkeyup: function (ev) {
 				input.value = ev.target.value;
+				if (ev.keyCode === 13) {
+					inputList.push(ev.target.value);
+					input.value = "";
+					ev.target.value = "";
+				}
 			},
 			onkeydown: function (ev) {
 				input.value = ev.target.value;
@@ -255,6 +298,22 @@ window.onload = function () {
 				return newVal;
 			}))
 		('/span')
+		('br /')
+		('br /')
+		('div')
+			(repeat_obs(inputList, function (item, idx) {
+				return htmler()
+				('div')
+					('text', item)
+					('br /')
+				('/div')
+			}))
+		('/div')
+		('br /')
+		('br /')
+		('button', {onclick: function (e) { inputList.pop(); }})
+			('text', 'pop')
+		('/button')
 	('/div')
 
 	document.body.appendChild(stuff);
