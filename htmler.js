@@ -63,12 +63,6 @@
 			return this.selfFunc;
 		}
 
-		//text node
-		if (tag === 'text') {
-			this.getCurrentElem().textContent = typeof attrs === 'function' ? attrs(this.getCurrentElem()) : attrs;
-			return this.selfFunc;
-		}
-
 		//all other tags
 		var newElem = document.createElement(tag.replace(/\s/g, ''));
 		this.applyAttrs(newElem, attrs);
@@ -123,13 +117,42 @@
 		}
 	}
 
+	function text(value) {
+		return function (target) {
+			if (typeof value === 'function') {
+				var observer = value(target);
+				if (observer.listId) {
+					if (observer.changeFunc) {
+						target.textContent = observer.changeFunc(observer.childIds.length, observer.childIds.length, target);
+					}
+					else {
+						target.textContent = observer.store[observer.propName];
+					}
+				}
+				else {
+					if (observer.changeFunc) {
+						target.textContent = observer.changeFunc(observer.value, observer.value, target);
+					}
+					else {
+						target.textContent = observer.value;
+					}
+				}
+			}
+			else {
+				target.textContent = value;
+			}
+		}
+	}
+
 	function repeat(list, buildFunc) {
 		return function (target) {
 			if (typeof list === 'function') {
 				var observer = list(target);
-				observer.buildFunc = buildFunc;
-				for (var i = 0; i < observer.store[observer.propName].length; i++) {
-					target.appendChild(observer.buildFunc(observer.store[observer.propName][i], i));
+				if (observer.listId) {
+					observer.buildFunc = buildFunc;
+					for (var i = 0; i < observer.store[observer.propName].length; i++) {
+						target.appendChild(observer.buildFunc(observer.store[observer.propName][i], i));
+					}
 				}
 			}
 			else if (list instanceof Array) {
@@ -210,25 +233,26 @@
 		for (var i = 0; i < propObservers.length; i++) {
 			var obs = propObservers[i];
 			var currentVal = obs.obj[obs.prop];
-			if (currentVal !== obs.val) {
-				if (obs.func) {
-					obs.target.textContent = obs.func(currentVal, obs.val, obs.target);
+			if (currentVal !== obs.value) {
+				if (obs.changeFunc) {
+					obs.target.textContent = obs.changeFunc(currentVal, obs.value, obs.target);
 				}
 				else {
 					obs.target.textContent = currentVal;
 				}
-				obs.val = currentVal;
+				obs.value = currentVal;
 			}
 		}
 
 		window.requestAnimationFrame(updateObservers);
 	}
 
-	function obs(obj, prop, _func) {
+	function obs(obj, prop, _changeFunc) {
 		_func = typeof _func === 'function' ? _func : null;
 		return function (target) {
-			propObservers.push({obj: obj, prop: prop, val: obj.prop, target: target, func: _func});
-			return obj.prop;
+			var observer = {obj: obj, prop: prop, value: obj.prop, target: target, changeFunc: _changeFunc};
+			propObservers.push(observer);
+			return observer;
 		}
 	}
 
@@ -255,20 +279,20 @@
 	Store.prototype.obs = function (propName, _changeFunc) {
 		_changeFunc = typeof _changeFunc === 'function' ? _changeFunc : null;
 		return function (target) {
-			if (this[propName] instanceof Array) {
-				var list = this[propName];
+			var property = this[propName];
+			if (property instanceof Array) {
 				var childIds = [];
-				for (var i = 0; i < list.length; i++) {
-					childIds.push(list[i].uniqueId);
+				for (var i = 0; i < property.length; i++) {
+					childIds.push(property[i].uniqueId);
 				}
-				var observer = {propName: propName, listId: this[propName].uniqueId, childIds: childIds, target: target, changeFunc: _changeFunc, buildFunc: null, store: this};
+				var observer = {propName: propName, listId: property.uniqueId, childIds: childIds, target: target, changeFunc: _changeFunc, buildFunc: null, store: this};
 				this.listObservers.push(observer);
 				return observer;
 			}
 			else {
-				var observer = {propName: propName, value: this[propName], target: target, changeFunc: _changeFunc, store: this};
+				var observer = {propName: propName, value: property, target: target, changeFunc: _changeFunc, store: this};
 				this.valueObservers.push(observer);
-				return this[propName];
+				return observer;
 			}
 		}.bind(this);
 	}
@@ -283,6 +307,7 @@
 	target.htmler = htmler;
 	target.custom = custom;
 	target.promise = promise;
+	target.text = text;
 	target.repeat = repeat;
 	target.obs = obs;
 	target.make_store = make_store;
@@ -338,12 +363,12 @@ window.onload = function () {
 	('div', {id: 'container1', style: styles.container})
 		(box)
 		('span')
-			('text', data.name)
+			(text(data.name))
 		('/span')
 		('br /')
 		('br /')
 		('span')
-			('text', data.partner)
+			(text(data.partner))
 		('/span')
 		('br /')
 		('br /')
@@ -352,13 +377,13 @@ window.onload = function () {
 				var bg = idx % 2 === 0 ? 'grey' : 'white'
 				return htmler()
 				('li', {style: {'font-weight': 'bold', 'background-color': bg}})
-					('span')('text', item.label)('/span')
+					('span')(text(item.label))('/span')
 					('br /')
 					('span')
-						('text', function () {
+						(text(function () {
 							var m  = item.value > 2 ? " < 2" : " >= 2";
 							return item.value + m;
-						})
+						}))
 					('/span')
 				('/li')
 			}))
@@ -382,7 +407,7 @@ window.onload = function () {
 		('br /')
 		('br /')
 		('span', {style: {'font-size': '32px'}})
-			('text', store.obs('counter'))
+			(text(store.obs('counter')))
 		('/span')
 		('br /')
 		('br /')
@@ -402,7 +427,7 @@ window.onload = function () {
 		('br /')
 		('br /')
 		('span')
-			('text', store.obs('inputValue', function (newVal, oldVal, target) {
+			(text(store.obs('inputValue', function (newVal, oldVal, target) {
 				if (newVal === "hello") {
 					target.style.color = "red";
 				}
@@ -411,14 +436,14 @@ window.onload = function () {
 				}
 
 				return newVal;
-			}))
+			})))
 		('/span')
 		('br /')
 		('br /')
 		('span')
-			('text', store.obs('list', function (newVal, oldVal, target) {
+			(text(store.obs('list', function (newVal, oldVal, target) {
 				return oldVal + " -> " + newVal;
-			}))
+			})))
 		('/span')
 		('br /')
 		('br /')
@@ -426,8 +451,8 @@ window.onload = function () {
 			(repeat(store.obs('list'), function (item, idx) {
 				return htmler()
 				('div')
-					('span')('text', item.label + " ")('/span')
-					('span')('text', obs(item, 'value'))('/span')
+					('span')(text(item.label + " "))('/span')
+					('span')(text(obs(item, 'value')))('/span')
 					('br /')
 				('/div')
 			}))
@@ -435,16 +460,16 @@ window.onload = function () {
 		('br /')
 		('br /')
 		('button', {onclick: function (e) { store.list.splice(store.list.length / 2, 1); }})
-			('text', 'pop')
+			(text('pop'))
 		('/button')
 		('button', {onclick: function (e) { shuffle(store.list); }})
-			('text', 'shuffle')
+			(text('shuffle'))
 		('/button')
 		('button', {onclick: function (e) { store.list.forEach(function (i) { i.value++; }); }})
-			('text', 'increment')
+			(text('increment'))
 		('/button')
 		('button', {onclick: function (e) { store.list = store.list.filter(function (i) { return i.value > 2; }); }})
-			('text', 'filter')
+			(text('filter'))
 		('/button')
 	('/div')
 
