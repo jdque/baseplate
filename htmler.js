@@ -1,3 +1,17 @@
+(function () {
+	var idCounter = 1;
+	Object.defineProperty(Object.prototype, "__uniqueId", {
+		writable: true
+	});
+	Object.defineProperty(Object.prototype, "uniqueId", {
+		get: function () {
+			if (this.__uniqueId === undefined)
+				this.__uniqueId = idCounter++;
+			return this.__uniqueId;
+		}
+	});
+}());
+
 (function (target) {
 	var voidTags = {
 		area: true, base: true, br: true, col: true,
@@ -91,13 +105,13 @@
 		return new Htmler();
 	}
 
-	function custom (buildFunc) {
+	function custom(buildFunc) {
 		return function (parent) {
 			parent.appendChild(buildFunc());
 		};
 	}
 
-	function promise (buildFunc) {
+	function promise(buildFunc) {
 		return function (parent) {
 			var placeholderElement = document.createElement('_placeholder');
 			parent.appendChild(placeholderElement);
@@ -109,10 +123,19 @@
 		}
 	}
 
-	function repeat (list, buildFunc) {
-		return function (parent) {
-			for (var i = 0; i < list.length; i++) {
-				parent.appendChild(buildFunc(list[i], i));
+	function repeat(list, buildFunc) {
+		return function (target) {
+			if (typeof list === 'function') {
+				var observer = list(target);
+				observer.buildFunc = buildFunc;
+				for (var i = 0; i < observer.store[observer.prop].length; i++) {
+					target.appendChild(observer.buildFunc(observer.store[observer.prop][i], i));
+				}
+			}
+			else if (list instanceof Array) {
+				for (var i = 0; i < list.length; i++) {
+					target.appendChild(buildFunc(list[i], i));
+				}
 			}
 		};
 	}
@@ -121,6 +144,57 @@
 	var propObservers = [];
 	var listObservers = [];
 	var updateObservers = function () {
+		for (var i = 0; i < stores.length; i++) {
+			for (var j = 0 ; j < stores[i].propObservers.length; j++) {
+				var ref = stores[i].propObservers[j];
+				var currentVal = stores[i][ref.prop];
+				if (currentVal !== ref.val) {
+					if (ref.func) {
+						ref.target.textContent = ref.func(currentVal, ref.val, ref.target);
+					}
+					else {
+						ref.target.textContent = currentVal;
+					}
+					ref.val = currentVal;
+				}
+			}
+
+			for (var j = 0 ; j < stores[i].listObservers.length; j++) {
+				var ref = stores[i].listObservers[j];
+				var list = stores[i][ref.prop];
+				var differs = false;
+
+				for (var k = 0; k < list.length; k++) {
+					if (k === ref.childIds.length) {
+						differs = true;
+						break;
+					}
+					if (list[k].uniqueId !== ref.childIds[k]) {
+						differs = true;
+						break;
+					}
+				}
+
+				if (ref.listId !== list.uniqueId) {
+					ref.listId = list.uniqueId;
+					differs = true;
+				}
+
+				if (differs) {
+					while (ref.target.firstChild) {
+						ref.target.removeChild(ref.target.firstChild);
+					}
+
+					var childIds = [];
+					for (var k = 0; k < list.length; k++) {
+						childIds.push(list[k].uniqueId);
+						ref.target.appendChild(ref.buildFunc(list[k], k));
+					}
+					ref.childIds = childIds;
+				}
+			}
+		}
+
 		for (var i = 0 ; i < propObservers.length; i++) {
 			var ref = propObservers[i];
 			var currentVal = ref.obj[ref.prop];
@@ -135,25 +209,10 @@
 			}
 		}
 
-		for (var i = 0 ; i < listObservers.length; i++) {
-			var ref = listObservers[i];
-			if (ref.list.length > ref.count) {
-				for (var j = ref.count; j < ref.list.length; j++) {
-					ref.target.appendChild(ref.buildFunc(ref.list[j], j));
-				}
-			}
-			else if (ref.list.length < ref.count) {
-				for (var j = ref.count; j > ref.list.length; j--) {
-					ref.target.removeChild(ref.target.lastChild);
-				}
-			}
-			ref.count = ref.list.length;
-		}
-
 		window.requestAnimationFrame(updateObservers);
 	}
 
-	function obs (obj, prop, _func) {
+	function obs(obj, prop, _func) {
 		_func = typeof _func === 'function' ? _func : null;
 		return function (target) {
 			propObservers.push({obj: obj, prop: prop, val: obj.prop, target: target, func: _func});
@@ -161,13 +220,52 @@
 		}
 	}
 
-	function repeat_obs (list, buildFunc) {
-		return function (target) {
-			listObservers.push({list: list, count: list.length, target: target, buildFunc: buildFunc});
-			for (var i = 0; i < list.length; i++) {
-				target.appendChild(buildFunc(list[i], i));
-			}
+	function Store(obj) {
+		this.obj = obj;
+		this.propObservers = [];
+		this.listObservers = [];
+		for (key in obj) {
+			this.bindProp(key);
 		}
+	}
+
+	Store.prototype.bindProp = function (name) {
+		Object.defineProperty(this, name, {
+			set: function (val) {
+				this.obj[name] = val;
+			},
+			get: function () {
+				return this.obj[name];
+			}
+		});
+	}
+
+	Store.prototype.obs = function (prop, _func) {
+		_func = typeof _func === 'function' ? _func : null;
+		return function (target) {
+			if (this[prop] instanceof Array) {
+				var list = this[prop];
+				var childIds = [];
+				for (var i = 0; i < list.length; i++) {
+					childIds.push(list[i].uniqueId);
+				}
+				var observer = {prop: prop, listId: this[prop].uniqueId, childIds: childIds, target: target, func: _func, store: this};
+				this.listObservers.push(observer);
+				return observer;
+			}
+			else {
+				var observer = {prop: prop, val: this[prop], target: target, func: _func, store: this};
+				this.propObservers.push(observer);
+				return this[prop];
+			}
+		}.bind(this);
+	}
+
+	var stores = [];
+	function make_store(obj) {
+		var newStore = new Store(obj);
+		stores.push(newStore);
+		return newStore;
 	}
 
 	target.htmler = htmler;
@@ -175,7 +273,7 @@
 	target.promise = promise;
 	target.repeat = repeat;
 	target.obs = obs;
-	target.repeat_obs = repeat_obs;
+	target.make_store = make_store;
 })(window);
 
 window.onload = function () {
@@ -184,30 +282,35 @@ window.onload = function () {
 		partner: 'Jane'
 	};
 
-	var counter = {
-		value: 0
-	};
+	var store = make_store({
+		counter: 0,
+		inputValue: "",
+		list: [
+			{
+				label: "Hello",
+				value: 1
+			},
+			{
+				label: "World",
+				value: 2
+			},
+			{
+				label: "Again",
+				value: 3
+			}
+		]
+	});
 
-	var input = {
-		value: ""
-	};
-
-	var inputList = ["first", "second"];
-
-	var list = [
-		{
-			label: "Hello",
-			value: 1
-		},
-		{
-			label: "World",
-			value: 2
-		},
-		{
-			label: "Again",
-			value: 3
+	var shuffle = function (array) {
+		var curr = array.length, temp, randIdx;
+		while (curr !== 0) {
+			randIdx = Math.floor(Math.random() * curr);
+			curr -= 1;
+			temp = array[curr];
+			array[curr] = array[randIdx];
+			array[randIdx] = temp;
 		}
-	];
+	}
 
 	var styles = {
 		container: {'border': '2px solid black', 'width': '480px', 'padding': '8px'},
@@ -233,7 +336,7 @@ window.onload = function () {
 		('br /')
 		('br /')
 		('ul')
-			(repeat(list, function (item, idx) {
+			(repeat(store.list, function (item, idx) {
 				var bg = idx % 2 === 0 ? 'grey' : 'white'
 				return htmler()
 				('li', {style: {'font-weight': 'bold', 'background-color': bg}})
@@ -267,27 +370,27 @@ window.onload = function () {
 		('br /')
 		('br /')
 		('span', {style: {'font-size': '32px'}})
-			('text', obs(counter, 'value'))
+			('text', store.obs('counter'))
 		('/span')
 		('br /')
 		('br /')
 		('input', {
 			onkeyup: function (ev) {
-				input.value = ev.target.value;
+				store.inputValue = ev.target.value;
 				if (ev.keyCode === 13) {
-					inputList.push(ev.target.value);
-					input.value = "";
+					store.list.push({label: ev.target.value, value: 0});
+					store.inputValue = "";
 					ev.target.value = "";
 				}
 			},
 			onkeydown: function (ev) {
-				input.value = ev.target.value;
+				store.inputValue = ev.target.value;
 			}
 		})
 		('br /')
 		('br /')
 		('span')
-			('text', obs(input, 'value', function (newVal, oldVal, target) {
+			('text', store.obs('value', function (newVal, oldVal, target) {
 				if (newVal === "hello") {
 					target.style.color = "red";
 				}
@@ -301,24 +404,34 @@ window.onload = function () {
 		('br /')
 		('br /')
 		('div')
-			(repeat_obs(inputList, function (item, idx) {
+			(repeat(store.obs('list'), function (item, idx) {
 				return htmler()
 				('div')
-					('text', item)
+					('span')('text', item.label + " ")('/span')
+					('span')('text', obs(item, 'value'))('/span')
 					('br /')
 				('/div')
 			}))
 		('/div')
 		('br /')
 		('br /')
-		('button', {onclick: function (e) { inputList.pop(); }})
+		('button', {onclick: function (e) { store.list.splice(store.list.length / 2, 1); }})
 			('text', 'pop')
+		('/button')
+		('button', {onclick: function (e) { shuffle(store.list); }})
+			('text', 'shuffle')
+		('/button')
+		('button', {onclick: function (e) { store.list.forEach(function (i) { i.value++; }); }})
+			('text', 'increment')
+		('/button')
+		('button', {onclick: function (e) { store.list = store.list.filter(function (i) { return i.value > 2; }); }})
+			('text', 'filter')
 		('/button')
 	('/div')
 
 	document.body.appendChild(stuff);
 
 	window.setInterval(function () {
-		counter.value++;
+		store.counter++;
 	}, 100);
 }
