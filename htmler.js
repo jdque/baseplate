@@ -128,8 +128,8 @@
 			if (typeof list === 'function') {
 				var observer = list(target);
 				observer.buildFunc = buildFunc;
-				for (var i = 0; i < observer.store[observer.prop].length; i++) {
-					target.appendChild(observer.buildFunc(observer.store[observer.prop][i], i));
+				for (var i = 0; i < observer.store[observer.propName].length; i++) {
+					target.appendChild(observer.buildFunc(observer.store[observer.propName][i], i));
 				}
 			}
 			else if (list instanceof Array) {
@@ -145,67 +145,79 @@
 	var listObservers = [];
 	var updateObservers = function () {
 		for (var i = 0; i < stores.length; i++) {
-			for (var j = 0 ; j < stores[i].propObservers.length; j++) {
-				var ref = stores[i].propObservers[j];
-				var currentVal = stores[i][ref.prop];
-				if (currentVal !== ref.val) {
-					if (ref.func) {
-						ref.target.textContent = ref.func(currentVal, ref.val, ref.target);
+			var store = stores[i];
+
+			for (var j = 0; j < store.valueObservers.length; j++) {
+				var obs = store.valueObservers[j];
+				var currentVal = store[obs.propName];
+				if (currentVal !== obs.value) {
+					if (obs.changeFunc) {
+						obs.target.textContent = obs.changeFunc(currentVal, obs.value, obs.target);
 					}
 					else {
-						ref.target.textContent = currentVal;
+						obs.target.textContent = currentVal;
 					}
-					ref.val = currentVal;
+					obs.value = currentVal;
 				}
 			}
 
-			for (var j = 0 ; j < stores[i].listObservers.length; j++) {
-				var ref = stores[i].listObservers[j];
-				var list = stores[i][ref.prop];
+			for (var j = 0; j < store.listObservers.length; j++) {
+				var obs = store.listObservers[j];
+				var list = store[obs.propName];
 				var differs = false;
 
-				for (var k = 0; k < list.length; k++) {
-					if (k === ref.childIds.length) {
-						differs = true;
-						break;
-					}
-					if (list[k].uniqueId !== ref.childIds[k]) {
-						differs = true;
-						break;
-					}
-				}
-
-				if (ref.listId !== list.uniqueId) {
-					ref.listId = list.uniqueId;
+				if (obs.listId !== list.uniqueId) {
+					obs.listId = list.uniqueId;
 					differs = true;
+				}
+				else {
+					for (var k = 0; k < list.length; k++) {
+						if (k === obs.childIds.length) {
+							differs = true;
+							break;
+						}
+						if (list[k].uniqueId !== obs.childIds[k]) {
+							differs = true;
+							break;
+						}
+					}
 				}
 
 				if (differs) {
-					while (ref.target.firstChild) {
-						ref.target.removeChild(ref.target.firstChild);
+					var newChildIds = [];
+					for (var k = 0; k < list.length; k++) {
+						newChildIds.push(list[k].uniqueId);
 					}
 
-					var childIds = [];
-					for (var k = 0; k < list.length; k++) {
-						childIds.push(list[k].uniqueId);
-						ref.target.appendChild(ref.buildFunc(list[k], k));
+					if (obs.changeFunc) {
+						obs.target.textContent = obs.changeFunc(newChildIds.length, obs.childIds.length, obs.target);
 					}
-					ref.childIds = childIds;
+
+					if (obs.buildFunc) {
+						while (obs.target.firstChild) {
+							obs.target.removeChild(obs.target.firstChild);
+						}
+						for (var k = 0; k < list.length; k++) {
+							obs.target.appendChild(obs.buildFunc(list[k], k));
+						}
+					}
+
+					obs.childIds = newChildIds;
 				}
 			}
 		}
 
-		for (var i = 0 ; i < propObservers.length; i++) {
-			var ref = propObservers[i];
-			var currentVal = ref.obj[ref.prop];
-			if (currentVal !== ref.val) {
-				if (ref.func) {
-					ref.target.textContent = ref.func(currentVal, ref.val, ref.target);
+		for (var i = 0; i < propObservers.length; i++) {
+			var obs = propObservers[i];
+			var currentVal = obs.obj[obs.prop];
+			if (currentVal !== obs.val) {
+				if (obs.func) {
+					obs.target.textContent = obs.func(currentVal, obs.val, obs.target);
 				}
 				else {
-					ref.target.textContent = currentVal;
+					obs.target.textContent = currentVal;
 				}
-				ref.val = currentVal;
+				obs.val = currentVal;
 			}
 		}
 
@@ -222,41 +234,41 @@
 
 	function Store(obj) {
 		this.obj = obj;
-		this.propObservers = [];
+		this.valueObservers = [];
 		this.listObservers = [];
 		for (key in obj) {
 			this.bindProp(key);
 		}
 	}
 
-	Store.prototype.bindProp = function (name) {
-		Object.defineProperty(this, name, {
+	Store.prototype.bindProp = function (key) {
+		Object.defineProperty(this, key, {
 			set: function (val) {
-				this.obj[name] = val;
+				this.obj[key] = val;
 			},
 			get: function () {
-				return this.obj[name];
+				return this.obj[key];
 			}
 		});
 	}
 
-	Store.prototype.obs = function (prop, _func) {
-		_func = typeof _func === 'function' ? _func : null;
+	Store.prototype.obs = function (propName, _changeFunc) {
+		_changeFunc = typeof _changeFunc === 'function' ? _changeFunc : null;
 		return function (target) {
-			if (this[prop] instanceof Array) {
-				var list = this[prop];
+			if (this[propName] instanceof Array) {
+				var list = this[propName];
 				var childIds = [];
 				for (var i = 0; i < list.length; i++) {
 					childIds.push(list[i].uniqueId);
 				}
-				var observer = {prop: prop, listId: this[prop].uniqueId, childIds: childIds, target: target, func: _func, store: this};
+				var observer = {propName: propName, listId: this[propName].uniqueId, childIds: childIds, target: target, changeFunc: _changeFunc, buildFunc: null, store: this};
 				this.listObservers.push(observer);
 				return observer;
 			}
 			else {
-				var observer = {prop: prop, val: this[prop], target: target, func: _func, store: this};
-				this.propObservers.push(observer);
-				return this[prop];
+				var observer = {propName: propName, value: this[propName], target: target, changeFunc: _changeFunc, store: this};
+				this.valueObservers.push(observer);
+				return this[propName];
 			}
 		}.bind(this);
 	}
@@ -390,7 +402,7 @@ window.onload = function () {
 		('br /')
 		('br /')
 		('span')
-			('text', store.obs('value', function (newVal, oldVal, target) {
+			('text', store.obs('inputValue', function (newVal, oldVal, target) {
 				if (newVal === "hello") {
 					target.style.color = "red";
 				}
@@ -399,6 +411,13 @@ window.onload = function () {
 				}
 
 				return newVal;
+			}))
+		('/span')
+		('br /')
+		('br /')
+		('span')
+			('text', store.obs('list', function (newVal, oldVal, target) {
+				return oldVal + " -> " + newVal;
 			}))
 		('/span')
 		('br /')
