@@ -117,47 +117,45 @@
 		}
 	}
 
-	function text(value) {
+	function text(arg) {
 		return function (target) {
-			if (typeof value === 'function') {
-				var observer = value(target);
-				if (observer.listId) {
-					if (observer.changeFunc) {
+			var argValue = typeof arg === 'function' ? arg(target) : arg;
+
+			if (Observer.isObserver(argValue)) {
+				var observer = argValue;
+				if (observer.changeFunc) {
+					if (Observer.isList(observer)) {
 						target.textContent = observer.changeFunc(observer.childIds.length, observer.childIds.length, target);
 					}
 					else {
-						target.textContent = observer.store[observer.propName];
+						target.textContent = observer.changeFunc(observer.value, observer.value, target);
 					}
 				}
 				else {
-					if (observer.changeFunc) {
-						target.textContent = observer.changeFunc(observer.value, observer.value, target);
-					}
-					else {
-						target.textContent = observer.value;
-					}
+					target.textContent = observer.store[observer.propName];
 				}
 			}
 			else {
-				target.textContent = value;
+				target.textContent = argValue;
 			}
 		}
 	}
 
-	function repeat(list, buildFunc) {
+	function repeat(arg, buildFunc) {
 		return function (target) {
-			if (typeof list === 'function') {
-				var observer = list(target);
-				if (observer.listId) {
-					observer.buildFunc = buildFunc;
-					for (var i = 0; i < observer.store[observer.propName].length; i++) {
-						target.appendChild(observer.buildFunc(observer.store[observer.propName][i], i));
-					}
+			var argValue = typeof arg === 'function' ? arg(target) : arg;
+			buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
+
+			if (Observer.isObserver(argValue) && Observer.isList(argValue)) {
+				var observer = argValue;
+				observer.buildFunc = buildFunc;
+				for (var i = 0; i < observer.store[observer.propName].length; i++) {
+					target.appendChild(observer.buildFunc(observer.store[observer.propName][i], i));
 				}
 			}
-			else if (list instanceof Array) {
-				for (var i = 0; i < list.length; i++) {
-					target.appendChild(buildFunc(list[i], i));
+			else if (argValue instanceof Array) {
+				for (var i = 0; i < argValue.length; i++) {
+					target.appendChild(buildFunc(argValue[i], i));
 				}
 			}
 		};
@@ -256,6 +254,23 @@
 		}
 	}
 
+	var Observer = {
+		Type: {
+			VALUE: 0,
+			LIST: 1
+		},
+
+		isObserver: function (obj) {
+			return obj.__obsType !== undefined;
+		},
+		isValue: function (obj) {
+			return obj.__obsType === Observer.Type.VALUE;
+		},
+		isList: function (obj) {
+			return obj.__obsType === Observer.Type.LIST;
+		}
+	};
+
 	function Store(obj) {
 		this.obj = obj;
 		this.valueObservers = [];
@@ -285,12 +300,28 @@
 				for (var i = 0; i < property.length; i++) {
 					childIds.push(property[i].uniqueId);
 				}
-				var observer = {propName: propName, listId: property.uniqueId, childIds: childIds, target: target, changeFunc: _changeFunc, buildFunc: null, store: this};
+				var observer = {
+					__obsType: Observer.Type.LIST,
+					propName: propName,
+					listId: property.uniqueId,
+					childIds: childIds,
+					target: target,
+					changeFunc: _changeFunc,
+					buildFunc: null,
+					store: this
+				};
 				this.listObservers.push(observer);
 				return observer;
 			}
 			else {
-				var observer = {propName: propName, value: property, target: target, changeFunc: _changeFunc, store: this};
+				var observer = {
+					__obsType: Observer.Type.VALUE,
+					propName: propName,
+					value: property,
+					target: target,
+					changeFunc: _changeFunc,
+					store: this
+				};
 				this.valueObservers.push(observer);
 				return observer;
 			}
