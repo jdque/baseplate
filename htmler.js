@@ -99,9 +99,19 @@
 		return new Htmler();
 	}
 
-	function custom(buildFunc) {
-		return function (parent) {
-			parent.appendChild(buildFunc());
+	function custom(arg) {
+		return function (target) {
+			var argValue = typeof arg === 'function' ? arg(Observer.Context.ELEMENT, target) : arg;
+
+			if (Observer.isObserver(argValue)) {
+				var observer = argValue;
+				if (Observer.isObject(observer)) {
+					target.appendChild(observer.store[observer.propName]);
+				}
+			}
+			else if (argValue instanceof Element) {
+				target.appendChild(argValue);
+			}
 		};
 	}
 
@@ -119,7 +129,7 @@
 
 	function text(arg) {
 		return function (target) {
-			var argValue = typeof arg === 'function' ? arg(target) : arg;
+			var argValue = typeof arg === 'function' ? arg(Observer.Context.TEXT, target) : arg;
 
 			if (Observer.isObserver(argValue)) {
 				var observer = argValue;
@@ -128,7 +138,7 @@
 						target.textContent = observer.changeFunc(observer.childIds.length, observer.childIds.length, target);
 					}
 					else {
-						target.textContent = observer.changeFunc(observer.value, observer.value, target);
+						target.textContent = observer.changeFunc(observer.store[observer.propName], observer.store[observer.propName], target);
 					}
 				}
 				else {
@@ -142,15 +152,17 @@
 	}
 
 	function repeat(arg, buildFunc) {
+		buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
 		return function (target) {
-			var argValue = typeof arg === 'function' ? arg(target) : arg;
-			buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
+			var argValue = typeof arg === 'function' ? arg(Observer.Context.REPEAT, target) : arg;
 
-			if (Observer.isObserver(argValue) && Observer.isList(argValue)) {
+			if (Observer.isObserver(argValue)) {
 				var observer = argValue;
-				observer.buildFunc = buildFunc;
-				for (var i = 0; i < observer.store[observer.propName].length; i++) {
-					target.appendChild(observer.buildFunc(observer.store[observer.propName][i], i));
+				if (Observer.isList(observer)) {
+					observer.buildFunc = buildFunc;
+					for (var i = 0; i < observer.store[observer.propName].length; i++) {
+						target.appendChild(observer.buildFunc(observer.store[observer.propName][i], i));
+					}
 				}
 			}
 			else if (argValue instanceof Array) {
@@ -165,6 +177,8 @@
 	var propObservers = [];
 	var listObservers = [];
 	var updateObservers = function () {
+		//TODO - handle null/undefined values
+
 		for (var i = 0; i < stores.length; i++) {
 			var store = stores[i];
 
@@ -172,13 +186,54 @@
 				var obs = store.valueObservers[j];
 				var currentVal = store[obs.propName];
 				if (currentVal !== obs.value) {
-					if (obs.changeFunc) {
-						obs.target.textContent = obs.changeFunc(currentVal, obs.value, obs.target);
-					}
-					else {
-						obs.target.textContent = currentVal;
+					if (obs.__obsContext === Observer.Context.TEXT) {
+						if (obs.changeFunc) {
+							obs.target.textContent = obs.changeFunc(currentVal, obs.value, obs.target);
+						}
+						else {
+							obs.target.textContent = currentVal;
+						}
 					}
 					obs.value = currentVal;
+				}
+			}
+
+			for (var j = 0; j < store.objectObservers.length; j++) {
+				var obs = store.objectObservers[j];
+				var currentObj = store[obs.propName];
+				if (currentObj.uniqueId !== obs.objectId) {
+					if (obs.__obsContext === Observer.Context.TEXT) {
+						if (obs.changeFunc) {
+							obs.target.textContent = obs.changeFunc(currentObj, currentObj, obs.target);
+						}
+						else {
+							obs.target.textContent = currentObj;
+						}
+					}
+					else if (obs.__obsContext === Observer.Context.ELEMENT) {
+						var oldElement = null;
+						//TODO - cache element reference
+						for (var k = 0; k < obs.target.children.length; k++) {
+							if (obs.target.children[k].uniqueId === obs.objectId) {
+								oldElement = obs.target.children[k];
+								break;
+							}
+						}
+						if (oldElement) {
+							if (currentObj) {
+								if (obs.changeFunc) {
+									obs.target.replaceChild(obs.changeFunc(currentObj, currentObj, obs.target), oldElement);
+								}
+								else {
+									obs.target.replaceChild(currentObj, oldElement);
+								}
+							}
+							else {
+								obs.target.removeChild(oldElement);
+							}
+						}
+					}
+					obs.objectId = currentObj.uniqueId;
 				}
 			}
 
@@ -210,15 +265,21 @@
 						newChildIds.push(list[k].uniqueId);
 					}
 
-					if (obs.changeFunc) {
-						obs.target.textContent = obs.changeFunc(newChildIds.length, obs.childIds.length, obs.target);
+					if (obs.__obsContext === Observer.Context.TEXT) {
+						if (obs.changeFunc) {
+							obs.target.textContent = obs.changeFunc(newChildIds.length, obs.childIds.length, obs.target);
+						}
+						else {
+							obs.target.textContent = list;
+						}
 					}
-
-					if (obs.buildFunc) {
+					else if (obs.__obsContext === Observer.Context.REPEAT) {
+						//TODO - cache first element and remove n elements after it instead of removing all child elements of parent
 						while (obs.target.firstChild) {
 							obs.target.removeChild(obs.target.firstChild);
 						}
 						for (var k = 0; k < list.length; k++) {
+							//TODO - allow change function to get list item
 							obs.target.appendChild(obs.buildFunc(list[k], k));
 						}
 					}
@@ -247,7 +308,7 @@
 
 	function obs(obj, prop, _changeFunc) {
 		_func = typeof _func === 'function' ? _func : null;
-		return function (target) {
+		return function (context, target) {
 			var observer = {obj: obj, prop: prop, value: obj.prop, target: target, changeFunc: _changeFunc};
 			propObservers.push(observer);
 			return observer;
@@ -257,7 +318,14 @@
 	var Observer = {
 		Type: {
 			VALUE: 0,
-			LIST: 1
+			OBJECT: 1,
+			LIST: 2
+		},
+
+		Context: {
+			TEXT: 0,
+			ELEMENT: 1,
+			REPEAT: 2
 		},
 
 		isObserver: function (obj) {
@@ -265,6 +333,9 @@
 		},
 		isValue: function (obj) {
 			return obj.__obsType === Observer.Type.VALUE;
+		},
+		isObject: function (obj) {
+			return obj.__obsType === Observer.Type.OBJECT;
 		},
 		isList: function (obj) {
 			return obj.__obsType === Observer.Type.LIST;
@@ -274,6 +345,7 @@
 	function Store(obj) {
 		this.obj = obj;
 		this.valueObservers = [];
+		this.objectObservers = [];
 		this.listObservers = [];
 		for (key in obj) {
 			this.bindProp(key);
@@ -293,7 +365,7 @@
 
 	Store.prototype.obs = function (propName, _changeFunc) {
 		_changeFunc = typeof _changeFunc === 'function' ? _changeFunc : null;
-		return function (target) {
+		return function (context, target) {
 			var property = this[propName];
 			if (property instanceof Array) {
 				var childIds = [];
@@ -302,6 +374,7 @@
 				}
 				var observer = {
 					__obsType: Observer.Type.LIST,
+					__obsContext: context,
 					propName: propName,
 					listId: property.uniqueId,
 					childIds: childIds,
@@ -314,16 +387,32 @@
 				return observer;
 			}
 			else {
-				var observer = {
-					__obsType: Observer.Type.VALUE,
-					propName: propName,
-					value: property,
-					target: target,
-					changeFunc: _changeFunc,
-					store: this
-				};
-				this.valueObservers.push(observer);
-				return observer;
+				if (typeof property === 'object') {
+					var observer = {
+						__obsType: Observer.Type.OBJECT,
+						__obsContext: context,
+						propName: propName,
+						objectId: property.uniqueId,
+						target: target,
+						changeFunc: _changeFunc,
+						store: this
+					};
+					this.objectObservers.push(observer);
+					return observer;
+				}
+				else {
+					var observer = {
+						__obsType: Observer.Type.VALUE,
+						__obsContext: context,
+						propName: propName,
+						value: property,
+						target: target,
+						changeFunc: _changeFunc,
+						store: this
+					};
+					this.valueObservers.push(observer);
+					return observer;
+				}
 			}
 		}.bind(this);
 	}
@@ -390,6 +479,22 @@ window.onload = function () {
 	('div', {style: styles.child})
 	('/div')
 
+	var box1 = htmler()
+	('div', {style: {'background-color': 'red', 'width': '64px', 'height': '64px'},
+		onclick: function (e) { boxStore.element = box2; }
+	})
+	('/div')
+
+	var box2 = htmler()
+	('div', {style: {'background-color': 'green', 'width': '64px', 'height': '64px'},
+		onclick: function (e) { boxStore.element = box1; }
+	})
+	('/div')
+
+	var boxStore = make_store({
+		element: box1
+	});
+
 	var stuff = htmler()
 	('div', {id: 'container1', style: styles.container})
 		(box)
@@ -435,6 +540,9 @@ window.onload = function () {
 				done(box);
 			}, 2000);
 		}))
+		('br /')
+		('br /')
+		(custom(boxStore.obs('element')))
 		('br /')
 		('br /')
 		('span', {style: {'font-size': '32px'}})
