@@ -100,17 +100,17 @@
 	}
 
 	function custom(arg) {
-		return function (target) {
-			var argValue = typeof arg === 'function' ? arg(Observer.Context.ELEMENT, target) : arg;
+		return function (parent) {
+			var argValue = typeof arg === 'function' ? arg(Observer.Context.ELEMENT, parent) : arg;
 
 			if (Observer.isObserver(argValue)) {
 				var observer = argValue;
 				if (Observer.isObject(observer)) {
-					target.appendChild(observer.store[observer.propName]);
+					observer.target = parent.appendChild(observer.store[observer.propName]);
 				}
 			}
 			else if (argValue instanceof Element) {
-				target.appendChild(argValue);
+				parent.appendChild(argValue);
 			}
 		};
 	}
@@ -128,46 +128,58 @@
 	}
 
 	function text(arg) {
-		return function (target) {
-			var argValue = typeof arg === 'function' ? arg(Observer.Context.TEXT, target) : arg;
+		return function (parent) {
+			var argValue = typeof arg === 'function' ? arg(Observer.Context.TEXT, parent) : arg;
 
 			if (Observer.isObserver(argValue)) {
 				var observer = argValue;
+				observer.target = parent;
 				if (observer.changeFunc) {
 					if (Observer.isList(observer)) {
-						target.textContent = observer.changeFunc(observer.childIds.length, observer.childIds.length, target);
+						parent.textContent = observer.changeFunc(observer.childIds.length, observer.childIds.length, parent);
 					}
 					else {
-						target.textContent = observer.changeFunc(observer.store[observer.propName], observer.store[observer.propName], target);
+						parent.textContent = observer.changeFunc(observer.store[observer.propName], observer.store[observer.propName], parent);
 					}
 				}
 				else {
-					target.textContent = observer.store[observer.propName];
+					parent.textContent = observer.store[observer.propName];
 				}
 			}
 			else {
-				target.textContent = argValue;
+				parent.textContent = argValue;
 			}
 		}
 	}
 
 	function repeat(arg, buildFunc) {
 		buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
-		return function (target) {
-			var argValue = typeof arg === 'function' ? arg(Observer.Context.REPEAT, target) : arg;
+		return function (parent) {
+			var argValue = typeof arg === 'function' ? arg(Observer.Context.REPEAT, parent) : arg;
 
 			if (Observer.isObserver(argValue)) {
 				var observer = argValue;
 				if (Observer.isList(observer)) {
 					observer.buildFunc = buildFunc;
-					for (var i = 0; i < observer.store[observer.propName].length; i++) {
-						target.appendChild(observer.buildFunc(observer.store[observer.propName][i], i));
+					observer.previous = parent.lastChild;
+					var list = observer.store[observer.propName];
+					if (observer.previous) {
+						for (var i = list.length - 1; i >= 0; i--) {
+							parent.insertBefore(observer.buildFunc(list[i], i), observer.previous.nextSibling);
+						}
+						observer.target = observer.previous.nextSibling;
+					}
+					else {
+						for (var i = 0; i < list.length; i++) {
+							parent.appendChild(observer.buildFunc(list[i], i));
+						}
+						observer.target = parent.firstChild;
 					}
 				}
 			}
 			else if (argValue instanceof Array) {
 				for (var i = 0; i < argValue.length; i++) {
-					target.appendChild(buildFunc(argValue[i], i));
+					parent.appendChild(buildFunc(argValue[i], i));
 				}
 			}
 		};
@@ -211,29 +223,20 @@
 						}
 					}
 					else if (obs.__obsContext === Observer.Context.ELEMENT) {
-						var oldElement = null;
-						//TODO - cache element reference
-						for (var k = 0; k < obs.target.children.length; k++) {
-							if (obs.target.children[k].uniqueId === obs.objectId) {
-								oldElement = obs.target.children[k];
-								break;
-							}
-						}
-						if (oldElement) {
-							if (currentObj) {
-								if (obs.changeFunc) {
-									obs.target.replaceChild(obs.changeFunc(currentObj, currentObj, obs.target), oldElement);
-								}
-								else {
-									obs.target.replaceChild(currentObj, oldElement);
-								}
+						if (currentObj) {
+							if (obs.changeFunc) {
+								obs.target.parentNode.replaceChild(obs.changeFunc(currentObj, currentObj, obs.target), obs.target);
 							}
 							else {
-								obs.target.removeChild(oldElement);
+								obs.target.parentNode.replaceChild(currentObj, obs.target);
 							}
+						}
+						else {
+							obs.target.parentNode.removeChild(obs.target);
 						}
 					}
 					obs.objectId = currentObj.uniqueId;
+					obs.target = currentObj;
 				}
 			}
 
@@ -244,6 +247,9 @@
 
 				if (obs.listId !== list.uniqueId) {
 					obs.listId = list.uniqueId;
+					differs = true;
+				}
+				else if (obs.childIds.length !== obs.store[obs.propName].length) {
 					differs = true;
 				}
 				else {
@@ -274,13 +280,26 @@
 						}
 					}
 					else if (obs.__obsContext === Observer.Context.REPEAT) {
-						//TODO - cache first element and remove n elements after it instead of removing all child elements of parent
-						while (obs.target.firstChild) {
-							obs.target.removeChild(obs.target.firstChild);
+						//TODO - fix case where the preceding/proceeding elements of the list changes
+						var parent = obs.parent;
+						if (obs.previous) {
+							var previous = obs.previous;
+							for (var k = 0; k < obs.childIds.length; k++) {
+								parent.removeChild(previous.nextSibling);
+							}
+							for (var k = list.length - 1; k >= 0; k--) {
+								parent.insertBefore(obs.buildFunc(list[k], k), previous.nextSibling);
+							}
+							obs.target = previous.nextSibling;
 						}
-						for (var k = 0; k < list.length; k++) {
-							//TODO - allow change function to get list item
-							obs.target.appendChild(obs.buildFunc(list[k], k));
+						else {
+							while (parent.lastChild) {
+								parent.removeChild(parent.lastChild);
+							}
+							for (var k = 0; k < list.length; k++) {
+								parent.appendChild(obs.buildFunc(list[k], k));
+							}
+							obs.target = parent.firstChild;
 						}
 					}
 
@@ -294,10 +313,10 @@
 			var currentVal = obs.obj[obs.prop];
 			if (currentVal !== obs.value) {
 				if (obs.changeFunc) {
-					obs.target.textContent = obs.changeFunc(currentVal, obs.value, obs.target);
+					obs.parent.textContent = obs.changeFunc(currentVal, obs.value, obs.parent);
 				}
 				else {
-					obs.target.textContent = currentVal;
+					obs.parent.textContent = currentVal;
 				}
 				obs.value = currentVal;
 			}
@@ -308,8 +327,8 @@
 
 	function obs(obj, prop, _changeFunc) {
 		_func = typeof _func === 'function' ? _func : null;
-		return function (context, target) {
-			var observer = {obj: obj, prop: prop, value: obj.prop, target: target, changeFunc: _changeFunc};
+		return function (context, parent) {
+			var observer = {obj: obj, prop: prop, value: obj.prop, parent: parent, changeFunc: _changeFunc};
 			propObservers.push(observer);
 			return observer;
 		}
@@ -365,7 +384,7 @@
 
 	Store.prototype.obs = function (propName, _changeFunc) {
 		_changeFunc = typeof _changeFunc === 'function' ? _changeFunc : null;
-		return function (context, target) {
+		return function (context, parent) {
 			var property = this[propName];
 			if (property instanceof Array) {
 				var childIds = [];
@@ -378,7 +397,8 @@
 					propName: propName,
 					listId: property.uniqueId,
 					childIds: childIds,
-					target: target,
+					parent: parent,
+					target: null,
 					changeFunc: _changeFunc,
 					buildFunc: null,
 					store: this
@@ -393,7 +413,8 @@
 						__obsContext: context,
 						propName: propName,
 						objectId: property.uniqueId,
-						target: target,
+						parent: parent,
+						target: null,
 						changeFunc: _changeFunc,
 						store: this
 					};
@@ -406,7 +427,8 @@
 						__obsContext: context,
 						propName: propName,
 						value: property,
-						target: target,
+						parent: parent,
+						target: null,
 						changeFunc: _changeFunc,
 						store: this
 					};
@@ -587,6 +609,7 @@ window.onload = function () {
 		('br /')
 		('br /')
 		('div')
+			('span')(text("HEADER"))('/span')
 			(repeat(store.obs('list'), function (item, idx) {
 				return htmler()
 				('div')
@@ -595,6 +618,16 @@ window.onload = function () {
 					('br /')
 				('/div')
 			}))
+			('span')(text("-----------"))('/span')
+			(repeat(store.obs('list'), function (item, idx) {
+				return htmler()
+				('div')
+					('span')(text(item.label + " "))('/span')
+					('span')(text(obs(item, 'value')))('/span')
+					('br /')
+				('/div')
+			}))
+			('span')(text("FOOTER"))('/span')
 		('/div')
 		('br /')
 		('br /')
