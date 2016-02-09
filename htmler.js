@@ -133,21 +133,22 @@
 
 			if (Observer.isObserver(argValue)) {
 				var observer = argValue;
-				observer.target = parent;
-				if (observer.changeFunc) {
-					if (Observer.isList(observer)) {
-						parent.textContent = observer.changeFunc(observer.childIds.length, observer.childIds.length, parent);
-					}
-					else {
-						parent.textContent = observer.changeFunc(observer.store[observer.propName], observer.store[observer.propName], parent);
-					}
+				var text = "";
+				if (Observer.isValue(observer)) {
+					text = observer.store[observer.propName];
 				}
-				else {
-					parent.textContent = observer.store[observer.propName];
-				}
+				var textNode = document.createTextNode(text);
+				observer.target = parent.appendChild(textNode);
 			}
 			else {
-				parent.textContent = argValue;
+				if (typeof argValue === 'object') { //TODO - remove once global obs() is deprecated
+					var textNode = document.createTextNode(argValue.value);
+					argValue.target = parent.appendChild(textNode);
+				}
+				else {
+					var textNode = document.createTextNode(argValue);
+					parent.appendChild(textNode);
+				}
 			}
 		}
 	}
@@ -200,10 +201,10 @@
 				if (currentVal !== obs.value) {
 					if (obs.__obsContext === Observer.Context.TEXT) {
 						if (obs.changeFunc) {
-							obs.target.textContent = obs.changeFunc(currentVal, obs.value, obs.target);
+							obs.target.nodeValue = obs.changeFunc(currentVal, obs.value, obs.target);
 						}
 						else {
-							obs.target.textContent = currentVal;
+							obs.target.nodeValue = currentVal;
 						}
 					}
 					obs.value = currentVal;
@@ -216,10 +217,10 @@
 				if (currentObj.uniqueId !== obs.objectId) {
 					if (obs.__obsContext === Observer.Context.TEXT) {
 						if (obs.changeFunc) {
-							obs.target.textContent = obs.changeFunc(currentObj, currentObj, obs.target);
+							obs.target.nodeValue = obs.changeFunc(currentObj, currentObj, obs.target);
 						}
 						else {
-							obs.target.textContent = currentObj;
+							obs.target.nodeValue = currentObj;
 						}
 					}
 					else if (obs.__obsContext === Observer.Context.ELEMENT) {
@@ -273,10 +274,10 @@
 
 					if (obs.__obsContext === Observer.Context.TEXT) {
 						if (obs.changeFunc) {
-							obs.target.textContent = obs.changeFunc(newChildIds.length, obs.childIds.length, obs.target);
+							obs.target.nodeValue = obs.changeFunc(newChildIds.length, obs.childIds.length, obs.target);
 						}
 						else {
-							obs.target.textContent = list;
+							obs.target.nodeValue = list;
 						}
 					}
 					else if (obs.__obsContext === Observer.Context.REPEAT) {
@@ -313,10 +314,10 @@
 			var currentVal = obs.obj[obs.prop];
 			if (currentVal !== obs.value) {
 				if (obs.changeFunc) {
-					obs.parent.textContent = obs.changeFunc(currentVal, obs.value, obs.parent);
+					obs.target.nodeValue = obs.changeFunc(currentVal, obs.value, obs.target);
 				}
 				else {
-					obs.parent.textContent = currentVal;
+					obs.target.nodeValue = currentVal;
 				}
 				obs.value = currentVal;
 			}
@@ -590,10 +591,10 @@ window.onload = function () {
 		('span')
 			(text(store.obs('inputValue', function (newVal, oldVal, target) {
 				if (newVal === "hello") {
-					target.style.color = "red";
+					target.parentNode.style.color = "red";
 				}
 				else if (oldVal === "hello") {
-					target.style.color = "black";
+					target.parentNode.style.color = "black";
 				}
 
 				return newVal;
@@ -609,7 +610,7 @@ window.onload = function () {
 		('br /')
 		('br /')
 		('div')
-			('span')(text("HEADER"))('/span')
+			(text("HEADER"))
 			(repeat(store.obs('list'), function (item, idx) {
 				return htmler()
 				('div')
@@ -618,7 +619,7 @@ window.onload = function () {
 					('br /')
 				('/div')
 			}))
-			('span')(text("-----------"))('/span')
+			(text("-----------"))
 			(repeat(store.obs('list'), function (item, idx) {
 				return htmler()
 				('div')
@@ -627,7 +628,7 @@ window.onload = function () {
 					('br /')
 				('/div')
 			}))
-			('span')(text("FOOTER"))('/span')
+			(text("FOOTER"))
 		('/div')
 		('br /')
 		('br /')
