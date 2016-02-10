@@ -521,16 +521,12 @@ window.onload = function () {
 	var stuff = htmler()
 	('div', {id: 'container1', style: styles.container})
 		(box)
-		('span')
+		('div')
 			(text(data.name))
-		('/span')
-		('br /')
-		('br /')
-		('span')
+		('/div')
+		('div')
 			(text(data.partner))
-		('/span')
-		('br /')
-		('br /')
+		('/div')
 		('ul')
 			(repeat(store.list, function (item, idx) {
 				var bg = idx % 2 === 0 ? 'grey' : 'white'
@@ -547,8 +543,6 @@ window.onload = function () {
 				('/li')
 			}))
 		('/ul')
-		('br /')
-		('br /')
 		(custom(function () {
 			var z = document.createElement('div');
 			z.style.width = '64px';
@@ -557,16 +551,13 @@ window.onload = function () {
 			return z;
 		}))
 		('br /')
-		('br /')
 		(promise(function (done) {
 			window.setTimeout(function () {
 				done(box);
 			}, 2000);
 		}))
 		('br /')
-		('br /')
 		(custom(boxStore.obs('element')))
-		('br /')
 		('br /')
 		('span', {style: {'font-size': '32px'}})
 			(text(store.obs('counter')))
@@ -588,7 +579,7 @@ window.onload = function () {
 		})
 		('br /')
 		('br /')
-		('span')
+		('div')
 			(text(store.obs('inputValue', function (newVal, oldVal, target) {
 				if (newVal === "hello") {
 					target.parentNode.style.color = "red";
@@ -599,23 +590,21 @@ window.onload = function () {
 
 				return newVal;
 			})))
-		('/span')
+		('/div')
 		('br /')
-		('br /')
-		('span')
+		('div')
 			(text(store.obs('list', function (newVal, oldVal, target) {
 				return oldVal + " -> " + newVal;
 			})))
-		('/span')
-		('br /')
+		('/div')
 		('br /')
 		('div')
 			(text("HEADER"))
 			(repeat(store.obs('list'), function (item, idx) {
 				return htmler()
 				('div')
-					('span')(text(item.label + " "))('/span')
-					('span')(text(obs(item, 'value')))('/span')
+					(text(item.label + " "))
+					(text(obs(item, 'value')))
 					('br /')
 				('/div')
 			}))
@@ -623,14 +612,13 @@ window.onload = function () {
 			(repeat(store.obs('list'), function (item, idx) {
 				return htmler()
 				('div')
-					('span')(text(item.label + " "))('/span')
-					('span')(text(obs(item, 'value')))('/span')
+					(text(item.label + " "))
+					(text(obs(item, 'value')))
 					('br /')
 				('/div')
 			}))
 			(text("FOOTER"))
 		('/div')
-		('br /')
 		('br /')
 		('button', {onclick: function (e) { store.list.splice(store.list.length / 2, 1); }})
 			(text('pop'))
