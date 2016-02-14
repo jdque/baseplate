@@ -335,7 +335,12 @@
 	}
 
 	function obs(obj, prop, _changeFunc) {
-		_func = typeof _func === 'function' ? _func : null;
+		_changeFunc = typeof _changeFunc === 'function' ? _changeFunc : null;
+
+		if (obj instanceof Store) {
+			return obj.obs(prop, _changeFunc);
+		}
+
 		return function (context, parent) {
 			var observer = {obj: obj, prop: prop, value: obj.prop, parent: parent, changeFunc: _changeFunc};
 			propObservers.push(observer);
@@ -577,10 +582,10 @@ window.onload = function () {
 			}, 2000);
 		}))
 		('br /')
-		(custom(boxStore.obs('element')))
+		(custom(obs(boxStore, 'element')))
 		('br /')
 		('div', {style: {'font-size': '32px'}})
-			(text(store.obs('counter')))
+			(text(obs(store, 'counter')))
 		('/div')
 		('br /')
 		('input', {
@@ -599,7 +604,7 @@ window.onload = function () {
 		('br /')
 		('br /')
 		('div')
-			(text(store.obs('inputValue', function (newVal, oldVal, target) {
+			(text(obs(store, 'inputValue', function (newVal, oldVal, target) {
 				if (newVal === "hello") {
 					target.parentNode.style.color = "red";
 				}
@@ -612,14 +617,14 @@ window.onload = function () {
 		('/div')
 		('br /')
 		('div')
-			(text(store.obs('list', function (newVal, oldVal, target) {
+			(text(obs(store, 'list', function (newVal, oldVal, target) {
 				return oldVal + " -> " + newVal;
 			})))
 		('/div')
 		('br /')
 		('div')
 			(text("HEADER"))
-			(repeat(store.obs('list'), function (item, idx) {
+			(repeat(obs(store, 'list'), function (item, idx) {
 				return htmler()
 				('div')
 					(text(item.label + " "))
@@ -628,7 +633,7 @@ window.onload = function () {
 				('/div')
 			}))
 			(text("-----------"))
-			(repeat(store.obs('list'), function (item, idx) {
+			(repeat(obs(store, 'list'), function (item, idx) {
 				return htmler()
 				('div')
 					(text(item.label + " "))
