@@ -201,7 +201,9 @@
 				if (currentVal !== obs.value) {
 					if (obs.__obsContext === Observer.Context.TEXT) {
 						if (obs.changeFunc) {
+							obs.store.lock();
 							obs.target.nodeValue = obs.changeFunc(currentVal, obs.value, obs.target);
+							obs.store.unlock();
 						}
 						else {
 							obs.target.nodeValue = currentVal;
@@ -217,7 +219,9 @@
 				if (currentObj.uniqueId !== obs.objectId) {
 					if (obs.__obsContext === Observer.Context.TEXT) {
 						if (obs.changeFunc) {
+							obs.store.lock();
 							obs.target.nodeValue = obs.changeFunc(currentObj, currentObj, obs.target);
+							obs.store.unlock();
 						}
 						else {
 							obs.target.nodeValue = currentObj;
@@ -226,7 +230,9 @@
 					else if (obs.__obsContext === Observer.Context.ELEMENT) {
 						if (currentObj) {
 							if (obs.changeFunc) {
+								obs.store.lock();
 								obs.target.parentNode.replaceChild(obs.changeFunc(currentObj, currentObj, obs.target), obs.target);
+								obs.store.unlock();
 							}
 							else {
 								obs.target.parentNode.replaceChild(currentObj, obs.target);
@@ -274,7 +280,9 @@
 
 					if (obs.__obsContext === Observer.Context.TEXT) {
 						if (obs.changeFunc) {
+							obs.store.lock();
 							obs.target.nodeValue = obs.changeFunc(newChildIds.length, obs.childIds.length, obs.target);
+							obs.store.unlock();
 						}
 						else {
 							obs.target.nodeValue = list;
@@ -364,6 +372,7 @@
 
 	function Store(obj) {
 		this.obj = obj;
+		this.locked = false;
 		this.valueObservers = [];
 		this.objectObservers = [];
 		this.listObservers = [];
@@ -372,9 +381,20 @@
 		}
 	}
 
+	Store.prototype.lock = function () {
+		this.locked = true;
+	}
+
+	Store.prototype.unlock = function () {
+		this.locked = false;
+	}
+
 	Store.prototype.bindProp = function (key) {
 		Object.defineProperty(this, key, {
 			set: function (val) {
+				if (this.locked) {
+					throw new Error("Tried to modify locked store");
+				}
 				this.obj[key] = val;
 			},
 			get: function () {
@@ -559,10 +579,9 @@ window.onload = function () {
 		('br /')
 		(custom(boxStore.obs('element')))
 		('br /')
-		('span', {style: {'font-size': '32px'}})
+		('div', {style: {'font-size': '32px'}})
 			(text(store.obs('counter')))
-		('/span')
-		('br /')
+		('/div')
 		('br /')
 		('input', {
 			onkeyup: function (ev) {
