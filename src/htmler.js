@@ -12,7 +12,7 @@
 	});
 }());
 
-(function (target) {
+var Htmler = (function () {
 	var voidTags = {
 		area: true, base: true, br: true, col: true,
 		embed: true, hr: true, img: true, input: true,
@@ -91,105 +91,38 @@
 		}
 	}
 
-	function htmler() {
-		if (!isObserving) {
-			isObserving = true;
-			updateObservers();
-		}
-		return new Htmler();
-	}
-
-	function custom(arg) {
-		return function (parent) {
-			var argValue = typeof arg === 'function' ? arg(Observer.Context.ELEMENT, parent) : arg;
-
-			if (Observer.isObserver(argValue)) {
-				var observer = argValue;
-				if (Observer.isObject(observer)) {
-					observer.target = parent.appendChild(observer.store[observer.propName]);
-				}
-			}
-			else if (argValue instanceof Element) {
-				parent.appendChild(argValue);
-			}
-		};
-	}
-
-	function promise(buildFunc) {
-		return function (parent) {
-			var placeholderElement = document.createElement('_placeholder');
-			parent.appendChild(placeholderElement);
-
-			var doneFunc = function (element) {
-				parent.replaceChild(element, placeholderElement);
-			};
-			buildFunc(doneFunc);
-		}
-	}
-
-	function text(arg) {
-		return function (parent) {
-			var argValue = typeof arg === 'function' ? arg(Observer.Context.TEXT, parent) : arg;
-
-			if (Observer.isObserver(argValue)) {
-				var observer = argValue;
-				var text = "";
-				if (Observer.isValue(observer)) {
-					text = observer.store[observer.propName];
-				}
-				var textNode = document.createTextNode(text);
-				observer.target = parent.appendChild(textNode);
-			}
-			else {
-				if (typeof argValue === 'object') { //TODO - remove once global obs() is deprecated
-					var textNode = document.createTextNode(argValue.value);
-					argValue.target = parent.appendChild(textNode);
-				}
-				else {
-					var textNode = document.createTextNode(argValue);
-					parent.appendChild(textNode);
-				}
-			}
-		}
-	}
-
-	function repeat(arg, buildFunc) {
-		buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
-		return function (parent) {
-			var argValue = typeof arg === 'function' ? arg(Observer.Context.REPEAT, parent) : arg;
-
-			if (Observer.isObserver(argValue)) {
-				var observer = argValue;
-				if (Observer.isList(observer)) {
-					observer.buildFunc = buildFunc;
-					observer.previous = parent.lastChild;
-					var list = observer.store[observer.propName];
-					if (observer.previous) {
-						for (var i = list.length - 1; i >= 0; i--) {
-							parent.insertBefore(observer.buildFunc(list[i], i), observer.previous.nextSibling);
-						}
-						observer.target = observer.previous.nextSibling;
-					}
-					else {
-						for (var i = 0; i < list.length; i++) {
-							parent.appendChild(observer.buildFunc(list[i], i));
-						}
-						observer.target = parent.firstChild;
-					}
-				}
-			}
-			else if (argValue instanceof Array) {
-				for (var i = 0; i < argValue.length; i++) {
-					parent.appendChild(buildFunc(argValue[i], i));
-				}
-			}
-		};
-	}
-
 	var isObserving = false;
 	var propObservers = [];
 	var listObservers = [];
-	var updateObservers = function () {
+	var stores = [];
+	var Observer = {
+		Type: {
+			VALUE: 0,
+			OBJECT: 1,
+			LIST: 2
+		},
+
+		Context: {
+			TEXT: 0,
+			ELEMENT: 1,
+			REPEAT: 2
+		},
+
+		isObserver: function (obj) {
+			return obj.__obsType !== undefined;
+		},
+		isValue: function (obj) {
+			return obj.__obsType === Observer.Type.VALUE;
+		},
+		isObject: function (obj) {
+			return obj.__obsType === Observer.Type.OBJECT;
+		},
+		isList: function (obj) {
+			return obj.__obsType === Observer.Type.LIST;
+		}
+	};
+
+	function updateObservers() {
 		//TODO - handle null/undefined values
 
 		for (var i = 0; i < stores.length; i++) {
@@ -334,47 +267,6 @@
 		window.requestAnimationFrame(updateObservers);
 	}
 
-	function obs(obj, prop, _changeFunc) {
-		_changeFunc = typeof _changeFunc === 'function' ? _changeFunc : null;
-
-		if (obj instanceof Store) {
-			return obj.obs(prop, _changeFunc);
-		}
-
-		return function (context, parent) {
-			var observer = {obj: obj, prop: prop, value: obj.prop, parent: parent, changeFunc: _changeFunc};
-			propObservers.push(observer);
-			return observer;
-		}
-	}
-
-	var Observer = {
-		Type: {
-			VALUE: 0,
-			OBJECT: 1,
-			LIST: 2
-		},
-
-		Context: {
-			TEXT: 0,
-			ELEMENT: 1,
-			REPEAT: 2
-		},
-
-		isObserver: function (obj) {
-			return obj.__obsType !== undefined;
-		},
-		isValue: function (obj) {
-			return obj.__obsType === Observer.Type.VALUE;
-		},
-		isObject: function (obj) {
-			return obj.__obsType === Observer.Type.OBJECT;
-		},
-		isList: function (obj) {
-			return obj.__obsType === Observer.Type.LIST;
-		}
-	};
-
 	function Store(obj) {
 		this.obj = obj;
 		this.locked = false;
@@ -465,18 +357,122 @@
 		}.bind(this);
 	}
 
-	var stores = [];
-	function make_store(obj) {
-		var newStore = new Store(obj);
-		stores.push(newStore);
-		return newStore;
-	}
+	var exports = {
+		htmler: function () {
+			if (!isObserving) {
+				isObserving = true;
+				updateObservers();
+			}
+			return new Htmler();
+		},
 
-	target.htmler = htmler;
-	target.custom = custom;
-	target.promise = promise;
-	target.text = text;
-	target.repeat = repeat;
-	target.obs = obs;
-	target.make_store = make_store;
-})(window);
+		custom: function (arg) {
+			return function (parent) {
+				var argValue = typeof arg === 'function' ? arg(Observer.Context.ELEMENT, parent) : arg;
+
+				if (Observer.isObserver(argValue)) {
+					var observer = argValue;
+					if (Observer.isObject(observer)) {
+						observer.target = parent.appendChild(observer.store[observer.propName]);
+					}
+				}
+				else if (argValue instanceof Element) {
+					parent.appendChild(argValue);
+				}
+			};
+		},
+
+		promise: function (buildFunc) {
+			return function (parent) {
+				var placeholderElement = document.createElement('_placeholder');
+				parent.appendChild(placeholderElement);
+
+				var doneFunc = function (element) {
+					parent.replaceChild(element, placeholderElement);
+				};
+				buildFunc(doneFunc);
+			}
+		},
+
+		text: function (arg) {
+			return function (parent) {
+				var argValue = typeof arg === 'function' ? arg(Observer.Context.TEXT, parent) : arg;
+
+				if (Observer.isObserver(argValue)) {
+					var observer = argValue;
+					var text = "";
+					if (Observer.isValue(observer)) {
+						text = observer.store[observer.propName];
+					}
+					var textNode = document.createTextNode(text);
+					observer.target = parent.appendChild(textNode);
+				}
+				else {
+					if (typeof argValue === 'object') { //TODO - remove once global obs() is deprecated
+						var textNode = document.createTextNode(argValue.value);
+						argValue.target = parent.appendChild(textNode);
+					}
+					else {
+						var textNode = document.createTextNode(argValue);
+						parent.appendChild(textNode);
+					}
+				}
+			}
+		},
+
+		repeat: function (arg, buildFunc) {
+			buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
+			return function (parent) {
+				var argValue = typeof arg === 'function' ? arg(Observer.Context.REPEAT, parent) : arg;
+
+				if (Observer.isObserver(argValue)) {
+					var observer = argValue;
+					if (Observer.isList(observer)) {
+						observer.buildFunc = buildFunc;
+						observer.previous = parent.lastChild;
+						var list = observer.store[observer.propName];
+						if (observer.previous) {
+							for (var i = list.length - 1; i >= 0; i--) {
+								parent.insertBefore(observer.buildFunc(list[i], i), observer.previous.nextSibling);
+							}
+							observer.target = observer.previous.nextSibling;
+						}
+						else {
+							for (var i = 0; i < list.length; i++) {
+								parent.appendChild(observer.buildFunc(list[i], i));
+							}
+							observer.target = parent.firstChild;
+						}
+					}
+				}
+				else if (argValue instanceof Array) {
+					for (var i = 0; i < argValue.length; i++) {
+						parent.appendChild(buildFunc(argValue[i], i));
+					}
+				}
+			};
+		},
+
+		make_store: function (obj) {
+			var newStore = new Store(obj);
+			stores.push(newStore);
+			return newStore;
+		},
+
+		obs: function (obj, prop, _changeFunc) {
+			_changeFunc = typeof _changeFunc === 'function' ? _changeFunc : null;
+
+			if (obj instanceof Store) {
+				return obj.obs(prop, _changeFunc);
+			}
+
+			return function (context, parent) {
+				var observer = {obj: obj, prop: prop, value: obj.prop, parent: parent, changeFunc: _changeFunc};
+				propObservers.push(observer);
+				return observer;
+			}
+		}
+	};
+
+	return exports;
+})();

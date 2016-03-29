@@ -1,4 +1,12 @@
 window.onload = function () {
+	var htmler = Htmler.htmler,
+		custom = Htmler.custom,
+		promise = Htmler.promise,
+		text = Htmler.text,
+		repeat = Htmler.repeat,
+		make_store = Htmler.make_store,
+		obs = Htmler.obs;
+
 	var data = {
 		name: 'Joe',
 		partner: 'Jane'
