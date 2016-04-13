@@ -103,159 +103,14 @@ var Htmler = (function () {
 
 	var isObserving = false;
 	var propObservers = [];
-	var listObservers = [];
 	var stores = [];
-	var Observer = {
-		Type: {
-			VALUE: 0,
-			OBJECT: 1,
-			LIST: 2
-		},
 
-		Context: {
-			TEXT: 0,
-			ELEMENT: 1,
-			REPEAT: 2
-		},
-
-		isObserver: function (obj) {
-			return obj.__obsType !== undefined;
-		},
-		isValue: function (obj) {
-			return obj.__obsType === Observer.Type.VALUE;
-		},
-		isObject: function (obj) {
-			return obj.__obsType === Observer.Type.OBJECT;
-		},
-		isList: function (obj) {
-			return obj.__obsType === Observer.Type.LIST;
-		}
-	};
-
-	function updateObservers() {
-		//TODO - handle null/undefined values
-
+	function updateWatches() {
 		for (var i = 0; i < stores.length; i++) {
-			var store = stores[i];
-
-			for (var j = 0; j < store.valueObservers.length; j++) {
-				var obs = store.valueObservers[j];
-				var currentVal = store[obs.propName];
-				if (currentVal !== obs.value) {
-					if (obs.__obsContext === Observer.Context.TEXT) {
-						if (obs.changeFunc) {
-							obs.store.lock();
-							obs.target.nodeValue = obs.changeFunc(currentVal, obs.value, obs.target);
-							obs.store.unlock();
-						}
-						else {
-							obs.target.nodeValue = currentVal;
-						}
-					}
-					obs.value = currentVal;
-				}
-			}
-
-			for (var j = 0; j < store.objectObservers.length; j++) {
-				var obs = store.objectObservers[j];
-				var currentObj = store[obs.propName];
-				if (currentObj.uniqueId !== obs.objectId) {
-					if (obs.__obsContext === Observer.Context.TEXT) {
-						if (obs.changeFunc) {
-							obs.store.lock();
-							obs.target.nodeValue = obs.changeFunc(currentObj, currentObj, obs.target);
-							obs.store.unlock();
-						}
-						else {
-							obs.target.nodeValue = currentObj;
-						}
-					}
-					else if (obs.__obsContext === Observer.Context.ELEMENT) {
-						if (currentObj) {
-							if (obs.changeFunc) {
-								obs.store.lock();
-								obs.target.parentNode.replaceChild(obs.changeFunc(currentObj, currentObj, obs.target), obs.target);
-								obs.store.unlock();
-							}
-							else {
-								obs.target.parentNode.replaceChild(currentObj, obs.target);
-							}
-						}
-						else {
-							obs.target.parentNode.removeChild(obs.target);
-						}
-					}
-					obs.objectId = currentObj.uniqueId;
-					obs.target = currentObj;
-				}
-			}
-
-			for (var j = 0; j < store.listObservers.length; j++) {
-				var obs = store.listObservers[j];
-				var list = store[obs.propName];
-				var differs = false;
-
-				if (obs.listId !== list.uniqueId) {
-					obs.listId = list.uniqueId;
-					differs = true;
-				}
-				else if (obs.childIds.length !== obs.store[obs.propName].length) {
-					differs = true;
-				}
-				else {
-					for (var k = 0; k < list.length; k++) {
-						if (k === obs.childIds.length) {
-							differs = true;
-							break;
-						}
-						if (list[k].uniqueId !== obs.childIds[k]) {
-							differs = true;
-							break;
-						}
-					}
-				}
-
-				if (differs) {
-					var newChildIds = [];
-					for (var k = 0; k < list.length; k++) {
-						newChildIds.push(list[k].uniqueId);
-					}
-
-					if (obs.__obsContext === Observer.Context.TEXT) {
-						if (obs.changeFunc) {
-							obs.store.lock();
-							obs.target.nodeValue = obs.changeFunc(newChildIds.length, obs.childIds.length, obs.target);
-							obs.store.unlock();
-						}
-						else {
-							obs.target.nodeValue = list;
-						}
-					}
-					else if (obs.__obsContext === Observer.Context.REPEAT) {
-						//TODO - fix case where the preceding/proceeding elements of the list changes
-						var parent = obs.parent;
-						if (obs.previous) {
-							var previous = obs.previous;
-							for (var k = 0; k < obs.childIds.length; k++) {
-								parent.removeChild(previous.nextSibling);
-							}
-							for (var k = list.length - 1; k >= 0; k--) {
-								parent.insertBefore(obs.buildFunc(list[k], k), previous.nextSibling);
-							}
-							obs.target = previous.nextSibling;
-						}
-						else {
-							while (parent.lastChild) {
-								parent.removeChild(parent.lastChild);
-							}
-							for (var k = 0; k < list.length; k++) {
-								parent.appendChild(obs.buildFunc(list[k], k));
-							}
-							obs.target = parent.firstChild;
-						}
-					}
-
-					obs.childIds = newChildIds;
+			for (var j = 0; j < stores[i].watches.length; j++) {
+				var watch = stores[i].watches[j];
+				if (watch.didChange()) {
+					watch.update();
 				}
 			}
 		}
@@ -274,15 +129,196 @@ var Htmler = (function () {
 			}
 		}
 
-		window.requestAnimationFrame(updateObservers);
+		window.requestAnimationFrame(updateWatches);
+	}
+
+	function Watch(sourceStore, propName, context) {
+		this.context = context;
+		this.sourceStore = sourceStore;
+		this.propName = propName;
+		this.targetElement = null;
+		this.changeFunc = null;
+	}
+
+	Watch.Context = {
+		TEXT: 0,
+		ELEMENT: 1,
+		REPEAT: 2
+	}
+
+	Watch.prototype.setTarget = function (element) {
+		this.targetElement = element;
+	}
+
+	Watch.prototype.setChangeFunc = function (changeFunc) {
+		this.changeFunc = changeFunc;
+	}
+
+	Watch.prototype.getValue = function () {
+		return this.sourceStore[this.propName];
+	}
+
+	Watch.prototype.didChange = function () {}
+
+	Watch.prototype.update = function () {}
+
+	function ValueWatch(store, propName, context) {
+		Watch.apply(this, [store, propName, context]);
+
+		this.oldValue = this.getValue();
+	}
+
+	ValueWatch.prototype = Object.create(Watch.prototype);
+
+	ValueWatch.prototype.didChange = function () {
+		return this.getValue() !== this.oldValue;
+	}
+
+	ValueWatch.prototype.update = function () {
+		var currentVal = this.getValue();
+
+		if (this.context === Watch.Context.TEXT) {
+			if (this.changeFunc) {
+				this.sourceStore.lock();
+				this.targetElement.nodeValue = this.changeFunc(currentVal, this.oldValue, this.targetElement);
+				this.sourceStore.unlock();
+			}
+			else {
+				this.targetElement.nodeValue = currentVal;
+			}
+		}
+		this.oldValue = currentVal;
+	}
+
+	function ArrayWatch(store, propName, context) {
+		Watch.apply(this, [store, propName, context]);
+
+		this.buildFunc = null;
+		var list = this.getValue();
+		this.oldListId = list.uniqueId;
+		this.oldChildIds = list.map(function (item) { return item.uniqueId; });
+	}
+
+	ArrayWatch.prototype = Object.create(Watch.prototype);
+
+	ArrayWatch.prototype.setBuildFunc = function (buildFunc) {
+		this.buildFunc = buildFunc;
+	}
+
+	ArrayWatch.prototype.didChange = function () {
+		var currentList = this.getValue();
+		var differs = false;
+
+		if (this.oldListId !== currentList.uniqueId) {  //reference changed
+			this.oldListId = currentList.uniqueId;
+			differs = true;
+		}
+		else if (this.oldChildIds.length !== currentList.length) {  //array size changed
+			differs = true;
+		}
+		else {  //reference of any children changed
+			for (var i = 0; i < currentList.length; i++) {
+				if (i === this.oldChildIds.length) {
+					differs = true;
+					break;
+				}
+				if (currentList[i].uniqueId !== this.oldChildIds[i]) {
+					differs = true;
+					break;
+				}
+			}
+		}
+
+		return differs;
+	}
+
+	ArrayWatch.prototype.update = function () {
+		var currentList = this.getValue();
+		var newChildIds = [];
+		for (var i = 0; i < currentList.length; i++) {
+			newChildIds.push(currentList[i].uniqueId);
+		}
+
+		if (this.context === Watch.Context.TEXT) {
+			if (this.changeFunc) {
+				this.sourceStore.lock();
+				this.targetElement.nodeValue = this.changeFunc(newChildIds.length, this.oldChildIds.length, this.targetElement);
+				this.sourceStore.unlock();
+			}
+			else {
+				this.targetElement.nodeValue = currentList;
+			}
+		}
+		else if (this.context === Watch.Context.REPEAT) {
+			var parent = this.targetElement.parentNode;
+			for (var i = 0; i < this.oldChildIds.length; i++) {
+				if (this.targetElement.nextSibling) {
+					parent.removeChild(this.targetElement.nextSibling);
+				}
+			}
+			for (var i = currentList.length - 1; i >= 0; i--) {
+				if (this.targetElement.nextSibling) {
+					parent.insertBefore(this.buildFunc(currentList[i], i), this.targetElement.nextSibling);
+				}
+				else {
+					parent.appendChild(this.buildFunc(currentList[i], i));
+				}
+			}
+		}
+
+		this.oldChildIds = newChildIds;
+	}
+
+	function ObjectWatch(store, propName, context) {
+		Watch.apply(this, [store, propName, context]);
+
+		this.oldObjectId = this.getValue().uniqueId;
+	}
+
+	ObjectWatch.prototype = Object.create(Watch.prototype);
+
+	ObjectWatch.prototype.didChange = function () {
+		return this.getValue().uniqueId !== this.oldObjectId;
+	}
+
+	ObjectWatch.prototype.update = function () {
+		var currentObj = this.getValue();
+
+		if (this.context === Watch.Context.TEXT) {
+			if (this.changeFunc) {
+				this.sourceStore.lock();
+				this.targetElement.nodeValue = this.changeFunc(currentObj, currentObj, this.targetElement);
+				this.sourceStore.unlock();
+			}
+			else {
+				this.targetElement.nodeValue = currentObj;
+			}
+		}
+		else if (this.context === Watch.Context.ELEMENT) {
+			if (currentObj instanceof Element) {
+				if (this.changeFunc) {
+					this.sourceStore.lock();
+					this.targetElement.parentNode.replaceChild(this.changeFunc(currentObj, currentObj, this.targetElement), this.targetElement);
+					this.sourceStore.unlock();
+				}
+				else {
+					this.targetElement.parentNode.replaceChild(currentObj, this.targetElement);
+				}
+				this.targetElement = currentObj;
+			}
+			else {
+				this.targetElement.parentNode.removeChild(this.targetElement);
+				this.targetElement = null;
+			}
+		}
+
+		this.oldObjectId = currentObj.uniqueId;
 	}
 
 	function Store(obj) {
 		this.obj = obj;
 		this.locked = false;
-		this.valueObservers = [];
-		this.objectObservers = [];
-		this.listObservers = [];
+		this.watches = [];
 		for (key in obj) {
 			this.bindProp(key);
 		}
@@ -314,56 +350,26 @@ var Htmler = (function () {
 		_changeFunc = typeof _changeFunc === 'function' ? _changeFunc : null;
 		return function (context, parent) {
 			var property = this[propName];
-			if (property instanceof Array) {
-				var childIds = [];
-				for (var i = 0; i < property.length; i++) {
-					childIds.push(property[i].uniqueId);
-				}
-				var observer = {
-					__obsType: Observer.Type.LIST,
-					__obsContext: context,
-					propName: propName,
-					listId: property.uniqueId,
-					childIds: childIds,
-					parent: parent,
-					target: null,
-					changeFunc: _changeFunc,
-					buildFunc: null,
-					store: this
-				};
-				this.listObservers.push(observer);
-				return observer;
-			}
-			else {
-				if (typeof property === 'object') {
-					var observer = {
-						__obsType: Observer.Type.OBJECT,
-						__obsContext: context,
-						propName: propName,
-						objectId: property.uniqueId,
-						parent: parent,
-						target: null,
-						changeFunc: _changeFunc,
-						store: this
-					};
-					this.objectObservers.push(observer);
-					return observer;
+			var propType = typeof property;
+			var watch = null;
+			if (propType === 'object') {
+				if (property instanceof Array) {
+					watch = new ArrayWatch(this, propName, context);
 				}
 				else {
-					var observer = {
-						__obsType: Observer.Type.VALUE,
-						__obsContext: context,
-						propName: propName,
-						value: property,
-						parent: parent,
-						target: null,
-						changeFunc: _changeFunc,
-						store: this
-					};
-					this.valueObservers.push(observer);
-					return observer;
+					watch = new ObjectWatch(this, propName, context);
 				}
 			}
+			else if (propType === 'string' || propType === 'number' || propType === 'boolean') {
+				watch = new ValueWatch(this, propName, context);
+			}
+
+			if (watch) {
+				watch.setChangeFunc(_changeFunc);
+				this.watches.push(watch);
+			}
+
+			return watch;
 		}.bind(this);
 	}
 
@@ -371,19 +377,21 @@ var Htmler = (function () {
 		htmler: function () {
 			if (!isObserving) {
 				isObserving = true;
-				updateObservers();
+				updateWatches();
 			}
 			return new Htmler();
 		},
 
 		custom: function (arg) {
 			return function (parent) {
-				var argValue = typeof arg === 'function' ? arg(Observer.Context.ELEMENT, parent) : arg;
+				var argValue = typeof arg === 'function' ? arg(Watch.Context.ELEMENT, parent) : arg;
 
-				if (Observer.isObserver(argValue)) {
-					var observer = argValue;
-					if (Observer.isObject(observer)) {
-						observer.target = parent.appendChild(observer.store[observer.propName]);
+				if (argValue instanceof ObjectWatch) {
+					var watch = argValue;
+					if (watch.getValue() instanceof Element) {
+						var element = parent.appendChild(watch.getValue());
+						watch.setTarget(element);
+						watch.update();
 					}
 				}
 				else if (argValue instanceof Element) {
@@ -394,7 +402,7 @@ var Htmler = (function () {
 
 		promise: function (buildFunc) {
 			return function (parent) {
-				var placeholderElement = document.createElement('_placeholder');
+				var placeholderElement = document.createComment('');
 				parent.appendChild(placeholderElement);
 
 				var doneFunc = function (element) {
@@ -406,16 +414,15 @@ var Htmler = (function () {
 
 		text: function (arg) {
 			return function (parent) {
-				var argValue = typeof arg === 'function' ? arg(Observer.Context.TEXT, parent) : arg;
+				var argValue = typeof arg === 'function' ? arg(Watch.Context.TEXT, parent) : arg;
 
-				if (Observer.isObserver(argValue)) {
-					var observer = argValue;
-					var text = "";
-					if (Observer.isValue(observer)) {
-						text = observer.store[observer.propName];
-					}
+				if (argValue instanceof Watch) {
+					var watch = argValue;
+					var text = watch.getValue();
 					var textNode = document.createTextNode(text);
-					observer.target = parent.appendChild(textNode);
+					var element = parent.appendChild(textNode);
+					watch.setTarget(element);
+					watch.update();
 				}
 				else {
 					if (typeof argValue === 'object') { //TODO - remove once global obs() is deprecated
@@ -433,27 +440,13 @@ var Htmler = (function () {
 		repeat: function (arg, buildFunc) {
 			buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
 			return function (parent) {
-				var argValue = typeof arg === 'function' ? arg(Observer.Context.REPEAT, parent) : arg;
+				var argValue = typeof arg === 'function' ? arg(Watch.Context.REPEAT, parent) : arg;
 
-				if (Observer.isObserver(argValue)) {
-					var observer = argValue;
-					if (Observer.isList(observer)) {
-						observer.buildFunc = buildFunc;
-						observer.previous = parent.lastChild;
-						var list = observer.store[observer.propName];
-						if (observer.previous) {
-							for (var i = list.length - 1; i >= 0; i--) {
-								parent.insertBefore(observer.buildFunc(list[i], i), observer.previous.nextSibling);
-							}
-							observer.target = observer.previous.nextSibling;
-						}
-						else {
-							for (var i = 0; i < list.length; i++) {
-								parent.appendChild(observer.buildFunc(list[i], i));
-							}
-							observer.target = parent.firstChild;
-						}
-					}
+				if (argValue instanceof ArrayWatch) {
+					var watch = argValue;
+					watch.setBuildFunc(buildFunc);
+					watch.setTarget(parent.appendChild(document.createComment('')));
+					watch.update();
 				}
 				else if (argValue instanceof Array) {
 					for (var i = 0; i < argValue.length; i++) {

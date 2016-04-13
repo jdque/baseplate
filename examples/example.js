@@ -53,13 +53,13 @@ window.onload = function () {
 	('/div')
 
 	var box1 = htmler()
-	('div', {style: {'background-color': 'red', 'width': '64px', 'height': '64px'},
+	('div', {style: [styles.child, {'background-color': 'red'}],
 		onclick: function (e) { boxStore.element = box2; }
 	})
 	('/div')
 
 	var box2 = htmler()
-	('div', {style: {'background-color': 'green', 'width': '64px', 'height': '64px'},
+	('div', {style: [styles.child, {'background-color': 'green'}],
 		onclick: function (e) { boxStore.element = box1; }
 	})
 	('/div')
@@ -70,7 +70,6 @@ window.onload = function () {
 
 	var stuff = htmler()
 	('div', {id: 'container1', style: styles.container})
-		(box)
 		('div')
 			(text(data.name))
 		('/div')
