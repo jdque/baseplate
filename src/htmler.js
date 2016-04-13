@@ -34,9 +34,9 @@ var Htmler = (function () {
 			return this.selfFunc;
 		}
 
-		//clone pre-built element if tag argument is a reference
+		//append pre-built element if tag argument is a reference
 		if (typeof tag === 'object') {
-			this.getCurrentElem().appendChild(tag.cloneNode(true));
+			this.getCurrentElem().appendChild(tag);
 			return this.selfFunc;
 		}
 
@@ -81,8 +81,18 @@ var Htmler = (function () {
 	Htmler.prototype.applyAttrs = function (elem, attrs) {
 		for (var key in attrs) {
 			if (typeof attrs[key] === 'object') {
-				for (var subKey in attrs[key]) {
-					elem[key][subKey] = attrs[key][subKey];
+				if (attrs[key] instanceof Array) {
+					for (var i = 0; i < attrs[key].length; i++) {
+						var subAttr = attrs[key][i];
+						for (var subKey in subAttr) {
+							elem[key][subKey] = subAttr[subKey];
+						}
+					}
+				}
+				else {
+					for (var subKey in attrs[key]) {
+						elem[key][subKey] = attrs[key][subKey];
+					}
 				}
 			}
 			else {
