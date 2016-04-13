@@ -207,29 +207,24 @@ var Htmler = (function () {
 
 	ArrayWatch.prototype.didChange = function () {
 		var currentList = this.getValue();
-		var differs = false;
 
 		if (this.oldListId !== currentList.uniqueId) {  //reference changed
-			this.oldListId = currentList.uniqueId;
-			differs = true;
+			return true;
 		}
-		else if (this.oldChildIds.length !== currentList.length) {  //array size changed
-			differs = true;
+		if (this.oldChildIds.length !== currentList.length) {  //array size changed
+			return true;
 		}
-		else {  //reference of any children changed
-			for (var i = 0; i < currentList.length; i++) {
-				if (i === this.oldChildIds.length) {
-					differs = true;
-					break;
-				}
-				if (currentList[i].uniqueId !== this.oldChildIds[i]) {
-					differs = true;
-					break;
-				}
+
+		for (var i = 0; i < currentList.length; i++) {  //reference of any children changed
+			if (i === this.oldChildIds.length) {
+				return true;
+			}
+			if (currentList[i].uniqueId !== this.oldChildIds[i]) {
+				return true;
 			}
 		}
 
-		return differs;
+		return false;
 	}
 
 	ArrayWatch.prototype.update = function () {
@@ -266,6 +261,7 @@ var Htmler = (function () {
 			}
 		}
 
+		this.oldListId = currentList.uniqueId;
 		this.oldChildIds = newChildIds;
 	}
 
