@@ -30,7 +30,7 @@ var Htmler = (function () {
 
 		//element creation is deferred to a function
 		if (typeof tag === 'function') {
-			tag(this.getCurrentElem());
+			tag(this.getCurrentElem(), attrs);
 			return this.selfFunc;
 		}
 
@@ -379,7 +379,7 @@ var Htmler = (function () {
 		},
 
 		custom: function (arg) {
-			return function (parent) {
+			return function (parent, attrs) {
 				var argValue = typeof arg === 'function' ? arg(Watch.Context.ELEMENT, parent) : arg;
 
 				if (argValue instanceof ObjectWatch) {
@@ -397,7 +397,7 @@ var Htmler = (function () {
 		},
 
 		promise: function (buildFunc) {
-			return function (parent) {
+			return function (parent, attrs) {
 				var placeholderElement = document.createComment('');
 				parent.appendChild(placeholderElement);
 
@@ -409,7 +409,7 @@ var Htmler = (function () {
 		},
 
 		text: function (arg) {
-			return function (parent) {
+			return function (parent, attrs) {
 				var argValue = typeof arg === 'function' ? arg(Watch.Context.TEXT, parent) : arg;
 
 				if (argValue instanceof Watch) {
@@ -433,20 +433,19 @@ var Htmler = (function () {
 			}
 		},
 
-		repeat: function (arg, buildFunc) {
+		repeat: function (buildFunc) {
 			buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
-			return function (parent) {
-				var argValue = typeof arg === 'function' ? arg(Watch.Context.REPEAT, parent) : arg;
-
-				if (argValue instanceof ArrayWatch) {
-					var watch = argValue;
+			return function (parent, attrs) {
+				var data = typeof attrs.data === 'function' ? attrs.data(Watch.Context.REPEAT, parent) : attrs.data;
+				if (data instanceof ArrayWatch) {
+					var watch = data;
 					watch.setBuildFunc(buildFunc);
 					watch.setTarget(parent.appendChild(document.createComment('')));
 					watch.update();
 				}
-				else if (argValue instanceof Array) {
-					for (var i = 0; i < argValue.length; i++) {
-						parent.appendChild(buildFunc(argValue[i], i));
+				else if (data instanceof Array) {
+					for (var i = 0; i < data.length; i++) {
+						parent.appendChild(buildFunc(data[i], i));
 					}
 				}
 			};
