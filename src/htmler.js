@@ -35,7 +35,7 @@ var Htmler = (function () {
 		}
 
 		//append pre-built element if tag argument is a reference
-		if (typeof tag === 'object') {
+		if (tag instanceof Node) {
 			this.getCurrentElem().appendChild(tag);
 			return this.selfFunc;
 		}
@@ -138,10 +138,10 @@ var Htmler = (function () {
 		window.requestAnimationFrame(updateWatches);
 	}
 
-	function Watch(sourceStore, propName, context) {
-		this.context = context;
+	function Watch(sourceStore, propName) {
 		this.sourceStore = sourceStore;
 		this.propName = propName;
+		this.context = null;
 		this.targetElement = null;
 		this.changeFunc = null;
 	}
@@ -150,6 +150,10 @@ var Htmler = (function () {
 		TEXT: 0,
 		ELEMENT: 1,
 		REPEAT: 2
+	}
+
+	Watch.prototype.setContext = function (context) {
+		this.context = context;
 	}
 
 	Watch.prototype.setTarget = function (element) {
@@ -360,29 +364,28 @@ var Htmler = (function () {
 
 	Store.prototype.obs = function (propName, _changeFunc) {
 		_changeFunc = typeof _changeFunc === 'function' ? _changeFunc : null;
-		return function (context, parent) {
-			var property = this[propName];
-			var propType = typeof property;
-			var watch = null;
-			if (propType === 'object') {
-				if (property instanceof Array) {
-					watch = new ArrayWatch(this, propName, context);
-				}
-				else {
-					watch = new ObjectWatch(this, propName, context);
-				}
-			}
-			else if (propType === 'string' || propType === 'number' || propType === 'boolean') {
-				watch = new ValueWatch(this, propName, context);
-			}
+		var property = this[propName];
+		var propType = typeof property;
+		var watch = null;
 
-			if (watch) {
-				watch.setChangeFunc(_changeFunc);
-				this.watches.push(watch);
+		if (propType === 'object') {
+			if (property instanceof Array) {
+				watch = new ArrayWatch(this, propName);
 			}
+			else {
+				watch = new ObjectWatch(this, propName);
+			}
+		}
+		else if (propType === 'string' || propType === 'number' || propType === 'boolean') {
+			watch = new ValueWatch(this, propName);
+		}
 
-			return watch;
-		}.bind(this);
+		if (watch) {
+			watch.setChangeFunc(_changeFunc);
+			this.watches.push(watch);
+		}
+
+		return watch;
 	}
 
 	var exports = {
@@ -396,12 +399,13 @@ var Htmler = (function () {
 
 		custom: function (arg) {
 			return function (parent, attrs) {
-				var argValue = typeof arg === 'function' ? arg(Watch.Context.ELEMENT, parent) : arg;
+				var argValue = typeof arg === 'function' ? arg(parent) : arg;
 
 				if (argValue instanceof ObjectWatch) {
 					var watch = argValue;
 					if (watch.getValue() instanceof Element) {
 						var element = parent.appendChild(watch.getValue());
+						watch.setContext(Watch.Context.ELEMENT);
 						watch.setTarget(element);
 						watch.update();
 					}
@@ -426,13 +430,14 @@ var Htmler = (function () {
 
 		text: function (arg) {
 			return function (parent, attrs) {
-				var argValue = typeof arg === 'function' ? arg(Watch.Context.TEXT, parent) : arg;
+				var argValue = typeof arg === 'function' ? arg(parent) : arg;
 
 				if (argValue instanceof Watch) {
 					var watch = argValue;
 					var text = watch.getValue();
 					var textNode = document.createTextNode(text);
 					var element = parent.appendChild(textNode);
+					watch.setContext(Watch.Context.TEXT);
 					watch.setTarget(element);
 					watch.update();
 				}
@@ -452,10 +457,11 @@ var Htmler = (function () {
 		repeat: function (buildFunc) {
 			buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
 			return function (parent, attrs) {
-				var data = typeof attrs.data === 'function' ? attrs.data(Watch.Context.REPEAT, parent) : attrs.data;
+				var data = typeof attrs.data === 'function' ? attrs.data(parent) : attrs.data;
 				if (data instanceof ArrayWatch) {
 					var watch = data;
 					watch.setBuildFunc(buildFunc);
+					watch.setContext(Watch.Context.REPEAT);
 					watch.setTarget(parent.appendChild(document.createComment('')));
 					watch.update();
 				}
