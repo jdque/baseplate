@@ -113,6 +113,12 @@ var Htmler = (function () {
 					watch.update();
 				}
 			}
+			for (var j = 0; j < stores[i].watches.length; j++) {
+				var watch = stores[i].watches[j];
+				if (watch.didChange()) {
+					watch.sync();
+				}
+			}
 		}
 
 		for (var i = 0; i < propObservers.length; i++) {
@@ -162,6 +168,8 @@ var Htmler = (function () {
 
 	Watch.prototype.update = function () {}
 
+	Watch.prototype.sync = function () {}
+
 	function ValueWatch(store, propName, context) {
 		Watch.apply(this, [store, propName, context]);
 
@@ -187,7 +195,10 @@ var Htmler = (function () {
 				this.targetElement.nodeValue = currentVal;
 			}
 		}
-		this.oldValue = currentVal;
+	}
+
+	ValueWatch.prototype.sync = function () {
+		this.oldValue = this.getValue();
 	}
 
 	function ArrayWatch(store, propName, context) {
@@ -229,15 +240,11 @@ var Htmler = (function () {
 
 	ArrayWatch.prototype.update = function () {
 		var currentList = this.getValue();
-		var newChildIds = [];
-		for (var i = 0; i < currentList.length; i++) {
-			newChildIds.push(currentList[i].uniqueId);
-		}
 
 		if (this.context === Watch.Context.TEXT) {
 			if (this.changeFunc) {
 				this.sourceStore.lock();
-				this.targetElement.nodeValue = this.changeFunc(newChildIds.length, this.oldChildIds.length, this.targetElement);
+				this.targetElement.nodeValue = this.changeFunc(currentList.length, this.oldChildIds.length, this.targetElement);
 				this.sourceStore.unlock();
 			}
 			else {
@@ -260,7 +267,14 @@ var Htmler = (function () {
 				}
 			}
 		}
+	}
 
+	ArrayWatch.prototype.sync = function () {
+		var currentList = this.getValue();
+		var newChildIds = [];
+		for (var i = 0; i < currentList.length; i++) {
+			newChildIds.push(currentList[i].uniqueId);
+		}
 		this.oldListId = currentList.uniqueId;
 		this.oldChildIds = newChildIds;
 	}
@@ -307,8 +321,10 @@ var Htmler = (function () {
 				this.targetElement = null;
 			}
 		}
+	}
 
-		this.oldObjectId = currentObj.uniqueId;
+	ObjectWatch.prototype.sync = function () {
+		this.oldObjectId = this.getValue().uniqueId;
 	}
 
 	function Store(obj) {

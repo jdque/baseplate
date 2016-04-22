@@ -77,7 +77,7 @@ window.onload = function () {
 			(text(data.partner))
 		('/div')
 		('ul')
-			(repeat(store.list, function (item, idx) {
+			(repeat(function (item, idx) {
 				var bg = idx % 2 === 0 ? 'grey' : 'white'
 				return htmler()
 				('li', {style: {'font-weight': 'bold', 'background-color': bg}})
@@ -90,7 +90,7 @@ window.onload = function () {
 						}))
 					('/span')
 				('/li')
-			}))
+			}), {data: store.list})
 		('/ul')
 		(custom(function () {
 			var z = document.createElement('div');
@@ -148,23 +148,23 @@ window.onload = function () {
 		('br /')
 		('div')
 			(text("HEADER"))
-			(repeat(obs(store, 'list'), function (item, idx) {
+			(repeat(function (item, idx) {
 				return htmler()
 				('div')
 					(text(item.label + " "))
 					(text(obs(item, 'value')))
 					('br /')
 				('/div')
-			}))
+			}), {data: obs(store, 'list')})
 			(text("-----------"))
-			(repeat(obs(store, 'list'), function (item, idx) {
+			(repeat(function (item, idx) {
 				return htmler()
 				('div')
 					(text(item.label + " "))
 					(text(obs(item, 'value')))
 					('br /')
 				('/div')
-			}))
+			}), {data: obs(store, 'list')})
 			(text("FOOTER"))
 		('/div')
 		('br /')
