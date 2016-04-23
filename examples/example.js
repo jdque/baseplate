@@ -184,7 +184,7 @@ window.onload = function () {
 
 	document.body.appendChild(stuff);
 
-	window.setInterval(function () {
+	/*window.setInterval(function () {
 		store.counter++;
-	}, 100);
+	}, 100);*/
 }

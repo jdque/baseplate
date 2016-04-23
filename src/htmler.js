@@ -89,9 +89,25 @@ var Htmler = (function () {
 						}
 					}
 				}
+				else if (attrs[key] instanceof Watch) {
+					var watch = attrs[key];
+					watch.setContext(Watch.Context.ATTRIBUTE);
+					watch.setTarget(elem);
+					watch.attrPath = [key];
+					elem[key] = watch.getValue();
+				}
 				else {
 					for (var subKey in attrs[key]) {
-						elem[key][subKey] = attrs[key][subKey];
+						if (attrs[key][subKey] instanceof Watch) {
+							var watch = attrs[key][subKey];
+							watch.setContext(Watch.Context.ATTRIBUTE);
+							watch.setTarget(elem);
+							watch.attrPath = [key, subKey];
+							elem[key][subKey] = watch.getValue();
+						}
+						else {
+							elem[key][subKey] = attrs[key][subKey];
+						}
 					}
 				}
 			}
@@ -134,8 +150,6 @@ var Htmler = (function () {
 				obs.value = currentVal;
 			}
 		}
-
-		window.requestAnimationFrame(updateWatches);
 	}
 
 	function Watch(sourceStore, propName) {
@@ -149,7 +163,8 @@ var Htmler = (function () {
 	Watch.Context = {
 		TEXT: 0,
 		ELEMENT: 1,
-		REPEAT: 2
+		ATTRIBUTE: 2,
+		REPEAT: 3
 	}
 
 	Watch.prototype.setContext = function (context) {
@@ -198,6 +213,13 @@ var Htmler = (function () {
 			else {
 				this.targetElement.nodeValue = currentVal;
 			}
+		}
+		else if (this.context === Watch.Context.ATTRIBUTE) {
+			var attrTarget = this.targetElement;
+			for (var i = 0; i < this.attrPath.length - 1; i++) {
+				attrTarget = attrTarget[this.attrPath[i]];
+			}
+			attrTarget[this.attrPath[this.attrPath.length - 1]] = currentVal;
 		}
 	}
 
@@ -355,11 +377,35 @@ var Htmler = (function () {
 					throw new Error("Tried to modify locked store");
 				}
 				this.obj[key] = val;
+				if (this.obj[key] instanceof Array) {
+					this.observeArrayMutations(this.obj[key]);
+				}
+				updateWatches();
 			},
 			get: function () {
 				return this.obj[key];
 			}
 		});
+
+		if (this.obj[key] instanceof Array) {
+			this.observeArrayMutations(this.obj[key]);
+		}
+	}
+
+	Store.prototype.observeArrayMutations = function (array) {
+		var mutators = ['copyWithin', 'fill', 'pop', 'push', 'reverse',
+						'shift', 'sort', 'splice', 'unshift'];
+
+		var overrideMutator = function (array, mutatorFuncName) {
+			array[mutatorFuncName] = function () {
+				Array.prototype[mutatorFuncName].apply(array, arguments);
+				updateWatches();
+			};
+		};
+
+		for (var i = 0; i < mutators.length; i++) {
+			overrideMutator(array, mutators[i]);
+		}
 	}
 
 	Store.prototype.obs = function (propName, _changeFunc) {
