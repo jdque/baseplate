@@ -118,37 +118,11 @@ var Htmler = (function () {
 	}
 
 	var isObserving = false;
-	var propObservers = [];
 	var stores = [];
 
-	function updateWatches() {
+	function updateStores() {
 		for (var i = 0; i < stores.length; i++) {
-			for (var j = 0; j < stores[i].watches.length; j++) {
-				var watch = stores[i].watches[j];
-				if (watch.didChange()) {
-					watch.update();
-				}
-			}
-			for (var j = 0; j < stores[i].watches.length; j++) {
-				var watch = stores[i].watches[j];
-				if (watch.didChange()) {
-					watch.sync();
-				}
-			}
-		}
-
-		for (var i = 0; i < propObservers.length; i++) {
-			var obs = propObservers[i];
-			var currentVal = obs.obj[obs.prop];
-			if (currentVal !== obs.value) {
-				if (obs.changeFunc) {
-					obs.target.nodeValue = obs.changeFunc(currentVal, obs.value, obs.target);
-				}
-				else {
-					obs.target.nodeValue = currentVal;
-				}
-				obs.value = currentVal;
-			}
+			stores[i].updateWatches();
 		}
 	}
 
@@ -286,10 +260,10 @@ var Htmler = (function () {
 			}
 			for (var i = currentList.length - 1; i >= 0; i--) {
 				if (this.targetElement.nextSibling) {
-					parent.insertBefore(this.buildFunc(currentList[i], i), this.targetElement.nextSibling);
+					parent.insertBefore(this.buildFunc(currentList.subStores[i], i), this.targetElement.nextSibling);
 				}
 				else {
-					parent.appendChild(this.buildFunc(currentList[i], i));
+					parent.appendChild(this.buildFunc(currentList.subStores[i], i));
 				}
 			}
 		}
@@ -353,13 +327,10 @@ var Htmler = (function () {
 		this.oldObjectId = this.getValue().uniqueId;
 	}
 
-	function Store(obj) {
-		this.obj = obj;
+	function Store() {
 		this.locked = false;
 		this.watches = [];
-		for (key in obj) {
-			this.bindProp(key);
-		}
+		this.subStores = {};
 	}
 
 	Store.prototype.lock = function () {
@@ -370,42 +341,8 @@ var Htmler = (function () {
 		this.locked = false;
 	}
 
-	Store.prototype.bindProp = function (key) {
-		Object.defineProperty(this, key, {
-			set: function (val) {
-				if (this.locked) {
-					throw new Error("Tried to modify locked store");
-				}
-				this.obj[key] = val;
-				if (this.obj[key] instanceof Array) {
-					this.observeArrayMutations(this.obj[key]);
-				}
-				updateWatches();
-			},
-			get: function () {
-				return this.obj[key];
-			}
-		});
-
-		if (this.obj[key] instanceof Array) {
-			this.observeArrayMutations(this.obj[key]);
-		}
-	}
-
-	Store.prototype.observeArrayMutations = function (array) {
-		var mutators = ['copyWithin', 'fill', 'pop', 'push', 'reverse',
-						'shift', 'sort', 'splice', 'unshift'];
-
-		var overrideMutator = function (array, mutatorFuncName) {
-			array[mutatorFuncName] = function () {
-				Array.prototype[mutatorFuncName].apply(array, arguments);
-				updateWatches();
-			};
-		};
-
-		for (var i = 0; i < mutators.length; i++) {
-			overrideMutator(array, mutators[i]);
-		}
+	Store.prototype.isLocked = function () {
+		return this.locked;
 	}
 
 	Store.prototype.obs = function (propName, _changeFunc) {
@@ -415,7 +352,7 @@ var Htmler = (function () {
 		var watch = null;
 
 		if (propType === 'object') {
-			if (property instanceof Array) {
+			if (property instanceof ArrayStore) {
 				watch = new ArrayWatch(this, propName);
 			}
 			else {
@@ -434,11 +371,195 @@ var Htmler = (function () {
 		return watch;
 	}
 
+	Store.prototype.updateWatches = function () {
+		for (var key in this.subStores) {
+			this.subStores[key].updateWatches();
+		}
+
+		for (var i = 0; i < this.watches.length; i++) {
+			var watch = this.watches[i];
+			if (watch.didChange()) {
+				watch.update();
+			}
+		}
+		for (var i = 0; i < this.watches.length; i++) {
+			var watch = this.watches[i];
+			if (watch.didChange()) {
+				watch.sync();
+			}
+		}
+	}
+
+	function ArrayStore(array, watches) {
+		Store.apply(this);
+		this.array = array;
+		this.watches = watches || [];
+		this.watches.forEach(function (watch) { watch.sourceStore = this;}.bind(this));
+		this.overrideArrayMethods();
+		this.updateItems();
+	}
+
+	ArrayStore.prototype = Object.create(Store.prototype);
+
+	ArrayStore.prototype.updateItems = function () {
+		this.subStores = {};
+		for (var i = 0; i < this.array.length; i++) {
+			this.bindItem(i);
+		}
+	}
+
+	ArrayStore.prototype.bindItem = function (idx) {
+		if (this.array[idx] instanceof Array) {
+			this.subStores[idx] = new ArrayStore(this.array[idx]);
+		}
+		else if (this.array[idx].constructor.name === 'Object') {
+			this.subStores[idx] = new ObjectStore(this.array[idx]);
+		}
+
+		if (!this.hasOwnProperty(idx)) {
+			Object.defineProperty(this, idx, {
+				set: function (val) {
+					if (this.isLocked()) {
+						throw new Error("Tried to modify locked store");
+					}
+
+					if (val instanceof ArrayStore) {
+						this.subStores[idx] = val;
+						this.array[idx] = val.array;
+					}
+					else if (val instanceof ObjectStore) {
+						this.subStores[idx] = val;
+						this.array[idx] = val.obj;
+					}
+					else if (val instanceof Array) {
+						this.subStores[idx] = new ArrayStore(val, this.subStores[idx].watches);
+						this.array[idx] = val;
+					}
+					else if (val.constructor.name === 'Object') {
+						this.subStores[idx] = new ObjectStore(val, this.subStores[idx].watches);
+						this.array[idx] = val;
+					}
+					else {
+						this.array[idx] = val;
+					}
+
+					updateStores();
+				},
+				get: function () {
+					return this.subStores[idx] || this.array[idx];
+				}
+			});
+		}
+	}
+
+	ArrayStore.prototype.overrideArrayMethods = function () {
+		var self = this;
+
+		var mutators = ['copyWithin', 'fill', 'pop', 'push', 'reverse', 'shift', 'sort',
+						'splice', 'unshift'];
+		mutators.forEach(function (func) {
+			self[func] = function () {
+				Array.prototype[func].apply(self.array, arguments);
+				self.updateItems();
+				updateStores();
+			};
+		});
+
+		var iterators = ['forEach', 'entries', 'every', 'some', 'filter', 'findIndex',
+						 'keys', 'map', 'reduce', 'reduceRight', 'values'];
+		iterators.forEach(function (func) {
+			self[func] = function () {
+				var result = Array.prototype[func].apply(self.array, arguments);
+				updateStores();
+				return result;
+			};
+		});
+
+		var accessors = ['concat', 'includes', 'join', 'slice', 'toSource', 'toString',
+						 'toLocaleString', 'indexOf', 'lastIndexOf'];
+		accessors.forEach(function (func) {
+			self[func] = function () {
+				for (var i = 0; i < arguments.length; i++) {
+					if (arguments[i] instanceof ObjectStore) {
+						arguments[i] = arguments[i].obj;
+					}
+					else if (arguments[i] instanceof ArrayStore) {
+						arguments[i] = arguments[i].array;
+					}
+				}
+				return Array.prototype[func].apply(self.array, arguments);
+			};
+		});
+
+		Object.defineProperty(this, 'length', {
+			get: function () { return this.array.length; }
+		});
+	}
+
+	function ObjectStore(obj, watches) {
+		Store.apply(this);
+		this.obj = obj;
+		this.watches = watches || [];
+		this.watches.forEach(function (watch) { watch.sourceStore = this;}.bind(this));
+		this.updateProps();
+	}
+
+	ObjectStore.prototype = Object.create(Store.prototype);
+
+	ObjectStore.prototype.updateProps = function () {
+		this.subStores = {};
+		for (key in this.obj) {
+			this.bindProp(key);
+		}
+	}
+
+	ObjectStore.prototype.bindProp = function (key) {
+		if (this.obj[key] instanceof Array) {
+			this.subStores[key] = new ArrayStore(this.obj[key]);
+		}
+		else if (this.obj[key].constructor.name === 'Object') {
+			this.subStores[key] = new ObjectStore(this.obj[key]);
+		}
+
+		Object.defineProperty(this, key, {
+			set: function (val) {
+				if (this.isLocked()) {
+					throw new Error("Tried to modify locked store");
+				}
+
+				if (val instanceof ArrayStore) {
+					this.subStores[key] = val;
+					this.obj[key] = val.array;
+				}
+				else if (val instanceof ObjectStore) {
+					this.subStores[key] = val;
+					this.obj[key] = val.obj;
+				}
+				else if (val instanceof Array) {
+					this.subStores[key] = new ArrayStore(val, this.subStores[key].watches);
+					this.obj[key] = val;
+				}
+				else if (val.constructor.name === 'Object') {
+					this.subStores[key] = new ObjectStore(val, this.subStores[key].watches);
+					this.obj[key] = val;
+				}
+				else {
+					this.obj[key] = val;
+				}
+
+				updateStores();
+			},
+			get: function () {
+				return this.subStores[key] || this.obj[key];
+			}
+		});
+	}
+
 	var exports = {
 		htmler: function () {
 			if (!isObserving) {
 				isObserving = true;
-				updateWatches();
+				updateStores();
 			}
 			return new Htmler();
 		},
@@ -488,14 +609,8 @@ var Htmler = (function () {
 					watch.update();
 				}
 				else {
-					if (typeof argValue === 'object') { //TODO - remove once global obs() is deprecated
-						var textNode = document.createTextNode(argValue.value);
-						argValue.target = parent.appendChild(textNode);
-					}
-					else {
-						var textNode = document.createTextNode(argValue);
-						parent.appendChild(textNode);
-					}
+					var textNode = document.createTextNode(argValue);
+					parent.appendChild(textNode);
 				}
 			}
 		},
@@ -511,7 +626,7 @@ var Htmler = (function () {
 					watch.setTarget(parent.appendChild(document.createComment('')));
 					watch.update();
 				}
-				else if (data instanceof Array) {
+				else if (data instanceof Array || data instanceof ArrayStore) {
 					for (var i = 0; i < data.length; i++) {
 						parent.appendChild(buildFunc(data[i], i));
 					}
@@ -520,22 +635,23 @@ var Htmler = (function () {
 		},
 
 		make_store: function (obj) {
-			var newStore = new Store(obj);
-			stores.push(newStore);
+			var newStore = null;
+			if (typeof obj === 'object') {
+				if (obj instanceof Array) {
+					newStore = new ArrayStore(obj);
+					stores.push(newStore);
+				}
+				else {
+					newStore = new ObjectStore(obj);
+					stores.push(newStore);
+				}
+			}
 			return newStore;
 		},
 
-		obs: function (obj, prop, _changeFunc) {
-			_changeFunc = typeof _changeFunc === 'function' ? _changeFunc : null;
-
-			if (obj instanceof Store) {
-				return obj.obs(prop, _changeFunc);
-			}
-
-			return function (context, parent) {
-				var observer = {obj: obj, prop: prop, value: obj.prop, parent: parent, changeFunc: _changeFunc};
-				propObservers.push(observer);
-				return observer;
+		obs: function (store, prop, _changeFunc) {
+			if (store instanceof Store) {
+				return store.obs(prop, _changeFunc);
 			}
 		}
 	};

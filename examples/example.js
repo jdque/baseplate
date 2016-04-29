@@ -151,7 +151,8 @@ window.onload = function () {
 			(repeat(function (item, idx) {
 				return htmler()
 				('div')
-					(text(item.label + " "))
+					(text(obs(item, 'label')))
+					(text(' '))
 					(text(obs(item, 'value')))
 					('br /')
 				('/div')
@@ -160,7 +161,8 @@ window.onload = function () {
 			(repeat(function (item, idx) {
 				return htmler()
 				('div')
-					(text(item.label + " "))
+					(text(obs(item, 'label')))
+					(text(' '))
 					(text(obs(item, 'value')))
 					('br /')
 				('/div')
