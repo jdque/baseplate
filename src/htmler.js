@@ -159,8 +159,8 @@ var Htmler = (function () {
 
 	Watch.prototype.update = function () { /*implement me*/ }
 
-	function ValueWatch(store, propName, context) {
-		Watch.apply(this, [store, propName, context]);
+	function ValueWatch(store, propName) {
+		Watch.apply(this, [store, propName]);
 	}
 
 	ValueWatch.prototype = Object.create(Watch.prototype);
@@ -188,8 +188,8 @@ var Htmler = (function () {
 		}
 	}
 
-	function ArrayWatch(store, propName, context) {
-		Watch.apply(this, [store, propName, context]);
+	function ArrayWatch(store, propName) {
+		Watch.apply(this, [store, propName]);
 
 		this.buildFunc = null;
 	}
@@ -201,17 +201,17 @@ var Htmler = (function () {
 	}
 
 	ArrayWatch.prototype.update = function () {
-		var currentList = this.getValue();
-		var oldChildIds = currentList.oldArrayIds || [];
+		var currentArray = this.getValue();
+		var oldChildIds = currentArray.oldArrayIds || [];
 
 		if (this.context === Watch.Context.TEXT) {
 			if (this.changeFunc) {
 				this.sourceStore.lock();
-				this.targetElement.nodeValue = this.changeFunc(currentList.length, oldChildIds.length, this.targetElement);
+				this.targetElement.nodeValue = this.changeFunc(currentArray.length, oldChildIds.length, this.targetElement);
 				this.sourceStore.unlock();
 			}
 			else {
-				this.targetElement.nodeValue = currentList;
+				this.targetElement.nodeValue = currentArray;
 			}
 		}
 		else if (this.context === Watch.Context.REPEAT) {
@@ -221,19 +221,19 @@ var Htmler = (function () {
 					parent.removeChild(this.targetElement.nextSibling);
 				}
 			}
-			for (var i = currentList.length - 1; i >= 0; i--) {
+			for (var i = currentArray.length - 1; i >= 0; i--) {
 				if (this.targetElement.nextSibling) {
-					parent.insertBefore(this.buildFunc(currentList.subStores[i], i), this.targetElement.nextSibling);
+					parent.insertBefore(this.buildFunc(currentArray.subStores[i], i), this.targetElement.nextSibling);
 				}
 				else {
-					parent.appendChild(this.buildFunc(currentList.subStores[i], i));
+					parent.appendChild(this.buildFunc(currentArray.subStores[i], i));
 				}
 			}
 		}
 	}
 
-	function ObjectWatch(store, propName, context) {
-		Watch.apply(this, [store, propName, context]);
+	function ObjectWatch(store, propName) {
+		Watch.apply(this, [store, propName]);
 	}
 
 	ObjectWatch.prototype = Object.create(Watch.prototype);
@@ -256,7 +256,7 @@ var Htmler = (function () {
 			if (currentObj instanceof Element) {
 				if (this.changeFunc) {
 					this.sourceStore.lock();
-					this.targetElement.parentNode.replaceChild(this.changeFunc(currentObj, currentObj, this.targetElement), this.targetElement);
+					this.targetElement.parentNode.replaceChild(this.changeFunc(currentObj, oldObj, this.targetElement), this.targetElement);
 					this.sourceStore.unlock();
 				}
 				else {
@@ -300,7 +300,7 @@ var Htmler = (function () {
 		var propType = typeof property;
 		var watch = null;
 
-		if (propType === 'object') {
+		if (propType === 'object' || propType === 'function') {
 			if (property instanceof ArrayStore) {
 				watch = new ArrayWatch(this, propName);
 			}
