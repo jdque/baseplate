@@ -157,31 +157,22 @@ var Htmler = (function () {
 		return this.sourceStore[this.propName];
 	}
 
-	Watch.prototype.didChange = function () {}
-
-	Watch.prototype.update = function () {}
-
-	Watch.prototype.sync = function () {}
+	Watch.prototype.update = function () { /*implement me*/ }
 
 	function ValueWatch(store, propName, context) {
 		Watch.apply(this, [store, propName, context]);
-
-		this.oldValue = this.getValue();
 	}
 
 	ValueWatch.prototype = Object.create(Watch.prototype);
 
-	ValueWatch.prototype.didChange = function () {
-		return this.getValue() !== this.oldValue;
-	}
-
 	ValueWatch.prototype.update = function () {
 		var currentVal = this.getValue();
+		var oldVal = currentVal; //TODO
 
 		if (this.context === Watch.Context.TEXT) {
 			if (this.changeFunc) {
 				this.sourceStore.lock();
-				this.targetElement.nodeValue = this.changeFunc(currentVal, this.oldValue, this.targetElement);
+				this.targetElement.nodeValue = this.changeFunc(currentVal, oldVal, this.targetElement);
 				this.sourceStore.unlock();
 			}
 			else {
@@ -197,17 +188,10 @@ var Htmler = (function () {
 		}
 	}
 
-	ValueWatch.prototype.sync = function () {
-		this.oldValue = this.getValue();
-	}
-
 	function ArrayWatch(store, propName, context) {
 		Watch.apply(this, [store, propName, context]);
 
 		this.buildFunc = null;
-		var list = this.getValue();
-		this.oldListId = list.uniqueId;
-		this.oldChildIds = list.map(function (item) { return item.uniqueId; });
 	}
 
 	ArrayWatch.prototype = Object.create(Watch.prototype);
@@ -216,35 +200,14 @@ var Htmler = (function () {
 		this.buildFunc = buildFunc;
 	}
 
-	ArrayWatch.prototype.didChange = function () {
-		var currentList = this.getValue();
-
-		if (this.oldListId !== currentList.uniqueId) {  //reference changed
-			return true;
-		}
-		if (this.oldChildIds.length !== currentList.length) {  //array size changed
-			return true;
-		}
-
-		for (var i = 0; i < currentList.length; i++) {  //reference of any children changed
-			if (i === this.oldChildIds.length) {
-				return true;
-			}
-			if (currentList[i].uniqueId !== this.oldChildIds[i]) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
 	ArrayWatch.prototype.update = function () {
 		var currentList = this.getValue();
+		var oldChildIds = currentList.oldArrayIds || [];
 
 		if (this.context === Watch.Context.TEXT) {
 			if (this.changeFunc) {
 				this.sourceStore.lock();
-				this.targetElement.nodeValue = this.changeFunc(currentList.length, this.oldChildIds.length, this.targetElement);
+				this.targetElement.nodeValue = this.changeFunc(currentList.length, oldChildIds.length, this.targetElement);
 				this.sourceStore.unlock();
 			}
 			else {
@@ -253,7 +216,7 @@ var Htmler = (function () {
 		}
 		else if (this.context === Watch.Context.REPEAT) {
 			var parent = this.targetElement.parentNode;
-			for (var i = 0; i < this.oldChildIds.length; i++) {
+			for (var i = 0; i < oldChildIds.length; i++) {
 				if (this.targetElement.nextSibling) {
 					parent.removeChild(this.targetElement.nextSibling);
 				}
@@ -269,35 +232,20 @@ var Htmler = (function () {
 		}
 	}
 
-	ArrayWatch.prototype.sync = function () {
-		var currentList = this.getValue();
-		var newChildIds = [];
-		for (var i = 0; i < currentList.length; i++) {
-			newChildIds.push(currentList[i].uniqueId);
-		}
-		this.oldListId = currentList.uniqueId;
-		this.oldChildIds = newChildIds;
-	}
-
 	function ObjectWatch(store, propName, context) {
 		Watch.apply(this, [store, propName, context]);
-
-		this.oldObjectId = this.getValue().uniqueId;
 	}
 
 	ObjectWatch.prototype = Object.create(Watch.prototype);
 
-	ObjectWatch.prototype.didChange = function () {
-		return this.getValue().uniqueId !== this.oldObjectId;
-	}
-
 	ObjectWatch.prototype.update = function () {
 		var currentObj = this.getValue();
+		var oldObj = currentObj; //TODO
 
 		if (this.context === Watch.Context.TEXT) {
 			if (this.changeFunc) {
 				this.sourceStore.lock();
-				this.targetElement.nodeValue = this.changeFunc(currentObj, currentObj, this.targetElement);
+				this.targetElement.nodeValue = this.changeFunc(currentObj, oldObj, this.targetElement);
 				this.sourceStore.unlock();
 			}
 			else {
@@ -323,14 +271,11 @@ var Htmler = (function () {
 		}
 	}
 
-	ObjectWatch.prototype.sync = function () {
-		this.oldObjectId = this.getValue().uniqueId;
-	}
-
-	function Store() {
+	function Store(watches) {
 		this.locked = false;
-		this.watches = [];
 		this.subStores = {};
+		this.watches = watches || [];
+		this.watches.forEach(function (watch) { watch.sourceStore = this;}, this);
 	}
 
 	Store.prototype.lock = function () {
@@ -344,6 +289,10 @@ var Htmler = (function () {
 	Store.prototype.isLocked = function () {
 		return this.locked;
 	}
+
+	Store.prototype.didChange = function () { /*implement me*/ }
+
+	Store.prototype.sync = function () { /*implement me*/ }
 
 	Store.prototype.obs = function (propName, _changeFunc) {
 		_changeFunc = typeof _changeFunc === 'function' ? _changeFunc : null;
@@ -372,34 +321,32 @@ var Htmler = (function () {
 	}
 
 	Store.prototype.updateWatches = function () {
-		for (var key in this.subStores) {
-			this.subStores[key].updateWatches();
+		if (this.didChange()) {
+			for (var i = 0; i < this.watches.length; i++) {
+				this.watches[i].update();
+			}
+			this.sync();
 		}
 
-		for (var i = 0; i < this.watches.length; i++) {
-			var watch = this.watches[i];
-			if (watch.didChange()) {
-				watch.update();
-			}
-		}
-		for (var i = 0; i < this.watches.length; i++) {
-			var watch = this.watches[i];
-			if (watch.didChange()) {
-				watch.sync();
-			}
+		for (var key in this.subStores) {
+			this.subStores[key].updateWatches();
 		}
 	}
 
 	function ArrayStore(array, watches) {
-		Store.apply(this);
+		Store.apply(this, [watches]);
 		this.array = array;
-		this.watches = watches || [];
-		this.watches.forEach(function (watch) { watch.sourceStore = this;}.bind(this));
+		this.oldArrayIds = null;
 		this.overrideArrayMethods();
 		this.updateItems();
 	}
 
 	ArrayStore.prototype = Object.create(Store.prototype);
+
+	ArrayStore.prototype.replaceArray = function (array) {
+		this.array = array;
+		this.updateItems();
+	}
 
 	ArrayStore.prototype.updateItems = function () {
 		this.subStores = {};
@@ -432,11 +379,13 @@ var Htmler = (function () {
 						this.array[idx] = val.obj;
 					}
 					else if (val instanceof Array) {
-						this.subStores[idx] = new ArrayStore(val, this.subStores[idx].watches);
+						//this.subStores[idx] = new ArrayStore(val, this.subStores[idx].watches);
+						this.subStores[idx].replaceArray(val);
 						this.array[idx] = val;
 					}
 					else if (val.constructor.name === 'Object') {
-						this.subStores[idx] = new ObjectStore(val, this.subStores[idx].watches);
+						//this.subStores[idx] = new ObjectStore(val, this.subStores[idx].watches);
+						this.subStores[idx].replaceObj(val);
 						this.array[idx] = val;
 					}
 					else {
@@ -496,15 +445,35 @@ var Htmler = (function () {
 		});
 	}
 
+	ArrayStore.prototype.didChange = function () {
+		if (this.oldArrayIds === null) return true;
+
+		if (this.oldArrayIds.length !== this.array.length) return true;
+
+		for (var i = 0; i < this.array.length; i++) {
+			if (this.oldArrayIds[i] !== this.array[i].uniqueId) return true;
+		}
+
+		return false;
+	}
+
+	ArrayStore.prototype.sync = function () {
+		this.oldArrayIds = this.array.map(function (item) { return item.uniqueId; });
+	}
+
 	function ObjectStore(obj, watches) {
-		Store.apply(this);
+		Store.apply(this, [watches]);
 		this.obj = obj;
-		this.watches = watches || [];
-		this.watches.forEach(function (watch) { watch.sourceStore = this;}.bind(this));
+		this.oldObjIds = null;
 		this.updateProps();
 	}
 
 	ObjectStore.prototype = Object.create(Store.prototype);
+
+	ObjectStore.prototype.replaceObj = function (obj) {
+		this.obj = obj;
+		this.updateProps();
+	}
 
 	ObjectStore.prototype.updateProps = function () {
 		this.subStores = {};
@@ -521,38 +490,58 @@ var Htmler = (function () {
 			this.subStores[key] = new ObjectStore(this.obj[key]);
 		}
 
-		Object.defineProperty(this, key, {
-			set: function (val) {
-				if (this.isLocked()) {
-					throw new Error("Tried to modify locked store");
-				}
+		if (!this.hasOwnProperty(key)) {
+			Object.defineProperty(this, key, {
+				set: function (val) {
+					if (this.isLocked()) {
+						throw new Error("Tried to modify locked store");
+					}
 
-				if (val instanceof ArrayStore) {
-					this.subStores[key] = val;
-					this.obj[key] = val.array;
-				}
-				else if (val instanceof ObjectStore) {
-					this.subStores[key] = val;
-					this.obj[key] = val.obj;
-				}
-				else if (val instanceof Array) {
-					this.subStores[key] = new ArrayStore(val, this.subStores[key].watches);
-					this.obj[key] = val;
-				}
-				else if (val.constructor.name === 'Object') {
-					this.subStores[key] = new ObjectStore(val, this.subStores[key].watches);
-					this.obj[key] = val;
-				}
-				else {
-					this.obj[key] = val;
-				}
+					if (val instanceof ArrayStore) {
+						this.subStores[key] = val;
+						this.obj[key] = val.array;
+					}
+					else if (val instanceof ObjectStore) {
+						this.subStores[key] = val;
+						this.obj[key] = val.obj;
+					}
+					else if (val instanceof Array) {
+						//this.subStores[key] = new ArrayStore(val, this.subStores[key].watches);
+						this.subStores[key].replaceArray(val);
+						this.obj[key] = val;
+					}
+					else if (val.constructor.name === 'Object') {
+						//this.subStores[key] = new ObjectStore(val, this.subStores[key].watches);
+						this.subStores[key].replaceObj(val);
+						this.obj[key] = val;
+					}
+					else {
+						this.obj[key] = val;
+					}
 
-				updateStores();
-			},
-			get: function () {
-				return this.subStores[key] || this.obj[key];
-			}
-		});
+					updateStores();
+				},
+				get: function () {
+					return this.subStores[key] || this.obj[key];
+				}
+			});
+		}
+	}
+
+	ObjectStore.prototype.didChange = function () {
+		if (this.oldObjIds === null) return true;
+
+		for (var key in this.obj) {
+			if (this.oldObjIds[key] !== this.obj[key].uniqueId) return true;
+		}
+		return false;
+	}
+
+	ObjectStore.prototype.sync = function () {
+		this.oldObjIds = {};
+		for (var key in this.obj) {
+			this.oldObjIds[key] = this.obj[key].uniqueId;
+		}
 	}
 
 	var exports = {
@@ -639,10 +628,12 @@ var Htmler = (function () {
 			if (typeof obj === 'object') {
 				if (obj instanceof Array) {
 					newStore = new ArrayStore(obj);
+					newStore.sync();
 					stores.push(newStore);
 				}
 				else {
 					newStore = new ObjectStore(obj);
+					newStore.sync();
 					stores.push(newStore);
 				}
 			}
