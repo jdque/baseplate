@@ -20,7 +20,7 @@ var Htmler = (function () {
 		param: true, source: true, track: true, wbr: true
 	};
 
-	function Htmler(tag, attrs) {
+	function Htmler(tag, props) {
 		if (!this.initialized) {
 			this.selfFunc = Htmler.bind(this);
 			this.elemStack = [];
@@ -30,12 +30,13 @@ var Htmler = (function () {
 
 		//element creation is deferred to a function
 		if (typeof tag === 'function') {
-			tag(this.getCurrentElem(), attrs);
+			tag(this.getCurrentElem(), props);
 			return this.selfFunc;
 		}
 
 		//append pre-built element if tag argument is a reference
 		if (tag instanceof Node) {
+			Htmler.applyProps(tag, props);
 			this.getCurrentElem().appendChild(tag);
 			return this.selfFunc;
 		}
@@ -56,7 +57,7 @@ var Htmler = (function () {
 		var strippedTag = tag.replace(/\s/g, '').replace(/\//g, '');
 		if (voidTags[strippedTag]) {
 			var newElem = document.createElement(strippedTag);
-			this.applyAttrs(newElem, attrs);
+			Htmler.applyProps(newElem, props);
 			if (this.elemStack.length > 0) {
 				this.getCurrentElem().appendChild(newElem);
 			}
@@ -65,7 +66,7 @@ var Htmler = (function () {
 
 		//all other tags
 		var newElem = document.createElement(tag.replace(/\s/g, ''));
-		this.applyAttrs(newElem, attrs);
+		Htmler.applyProps(newElem, props);
 		if (this.elemStack.length > 0) {
 			this.getCurrentElem().appendChild(newElem);
 		}
@@ -78,47 +79,100 @@ var Htmler = (function () {
 		return this.elemStack[this.elemStack.length - 1];
 	}
 
-	Htmler.prototype.applyAttrs = function (elem, attrs) {
-		for (var key in attrs) {
-			if (typeof attrs[key] === 'object') {
-				if (attrs[key] instanceof Array) {
-					for (var i = 0; i < attrs[key].length; i++) {
-						var subAttr = attrs[key][i];
-						for (var subKey in subAttr) {
-							elem[key][subKey] = subAttr[subKey];
-						}
-					}
-				}
-				else if (attrs[key] instanceof Watch) {
-					var watch = attrs[key];
-					watch.setContext(Watch.Context.ATTRIBUTE);
-					watch.setTarget(elem);
-					watch.attrPath = [key];
-					elem[key] = watch.getValue();
-				}
-				else {
-					for (var subKey in attrs[key]) {
-						if (attrs[key][subKey] instanceof Watch) {
-							var watch = attrs[key][subKey];
-							watch.setContext(Watch.Context.ATTRIBUTE);
-							watch.setTarget(elem);
-							watch.attrPath = [key, subKey];
-							elem[key][subKey] = watch.getValue();
-						}
-						else {
-							elem[key][subKey] = attrs[key][subKey];
-						}
-					}
-				}
+	Htmler.applyProps = function (elem, propsObj) {
+		if (!propsObj) return;
+
+		for (var i = 0, keys = Object.keys(propsObj); i < keys.length; i++) {
+			var name = keys[i];
+			var value = propsObj[name];
+			if (name === 'attributes' && typeof value === 'object') {
+				Htmler.applyAttrs(elem, value);
+			}
+			else if (name === 'classList' && typeof value === 'object') {
+				Htmler.applyClasses(elem, value);
+			}
+			else if (name === 'style' && typeof value === 'object') {
+				Htmler.applyStyles(elem, value);
 			}
 			else {
-				elem[key] = attrs[key];
+				if (value instanceof Watch) {
+					value.setContext(Watch.Context.ELEMENT_PROPERTY);
+					value.setTargetElement(elem);
+					value.targetPropName = name;
+					value.update();
+				}
+				else {
+					elem[name] = value;
+				}
 			}
+		}
+	}
+
+	Htmler.applyAttrs = function (elem, attrsObj) {
+		//TODO allow watch on object itself
+		if (isObjectLiteral(attrsObj)) {
+			for (var i = 0, keys = Object.keys(attrsObj); i < keys.length; i++) {
+				var name = keys[i];
+				var value = attrsObj[name];
+				if (value instanceof ValueWatch) {
+					value.setContext(Watch.Context.ELEMENT_ATTRIBUTE);
+					value.setTargetElement(elem);
+					value.targetAttrName = name;
+					value.update();
+				}
+				else {
+					elem.setAttribute(name, value);
+				}
+			}
+		}
+		else if (attrsObj instanceof ObjectWatch) {
+			attrsObj.setContext(Watch.Context.ELEMENT_ATTRIBUTE_OBJECT);
+			attrsObj.setTargetElement(elem);
+			attrsObj.update();
+		}
+	}
+
+	Htmler.applyClasses = function (elem, classArray) {
+		if (classArray instanceof ArrayWatch) {
+			classArray.setContext(Watch.Context.ELEMENT_CLASS_LIST);
+			classArray.setTargetElement(elem);
+			classArray.update();
+		}
+		else {
+			elem.classList.add.apply(elem.classList, classArray);
+		}
+	}
+
+	Htmler.applyStyles = function (elem, stylesObj) {
+		//TODO allow watch on object itself
+		if (isObjectLiteral(stylesObj)) {
+			for (var i = 0, keys = Object.keys(stylesObj); i < keys.length; i++) {
+				var name = keys[i];  //format can be either "foo-bar" or "fooBar"
+				var value = stylesObj[name];
+				if (value instanceof ValueWatch) {
+					value.setContext(Watch.Context.ELEMENT_STYLE_PROPERTY);
+					value.setTargetElement(elem);
+					value.targetStylePropName = name;
+					value.update();
+				}
+				else {
+					elem.style[name] = value;
+				}
+			}
+		}
+		else if (stylesObj instanceof ObjectWatch) {
+			stylesObj.setContext(Watch.Context.ELEMENT_STYLE_OBJECT);
+			stylesObj.setTargetElement(elem);
+			stylesObj.update();
 		}
 	}
 
 	var isObserving = false;
 	var stores = [];
+
+	function isObjectLiteral(obj) {
+		return obj != null && typeof obj === 'object' && obj.constructor.name === 'Object';
+	}
 
 	function updateStores() {
 		for (var i = 0; i < stores.length; i++) {
@@ -137,15 +191,20 @@ var Htmler = (function () {
 	Watch.Context = {
 		TEXT: 0,
 		ELEMENT: 1,
-		ATTRIBUTE: 2,
-		REPEAT: 3
+		ELEMENT_ATTRIBUTE: 2,
+		ELEMENT_ATTRIBUTE_OBJECT: 3,
+		ELEMENT_CLASS_LIST: 4,
+		ELEMENT_PROPERTY: 5,
+		ELEMENT_STYLE_OBJECT: 6,
+		ELEMENT_STYLE_PROPERTY: 7,
+		REPEAT: 8
 	}
 
 	Watch.prototype.setContext = function (context) {
 		this.context = context;
 	}
 
-	Watch.prototype.setTarget = function (element) {
+	Watch.prototype.setTargetElement = function (element) {
 		this.targetElement = element;
 	}
 
@@ -179,12 +238,14 @@ var Htmler = (function () {
 				this.targetElement.nodeValue = currentVal;
 			}
 		}
-		else if (this.context === Watch.Context.ATTRIBUTE) {
-			var attrTarget = this.targetElement;
-			for (var i = 0; i < this.attrPath.length - 1; i++) {
-				attrTarget = attrTarget[this.attrPath[i]];
-			}
-			attrTarget[this.attrPath[this.attrPath.length - 1]] = currentVal;
+		else if (this.context === Watch.Context.ELEMENT_ATTRIBUTE) {
+			this.targetElement.setAttribute(this.targetAttrName, currentVal);
+		}
+		else if (this.context === Watch.Context.ELEMENT_PROPERTY) {
+			this.targetElement[this.targetPropName] = currentVal;
+		}
+		else if (this.context === Watch.Context.ELEMENT_STYLE_PROPERTY) {
+			this.targetElement.style[this.targetStylePropName] = currentVal;
 		}
 	}
 
@@ -230,6 +291,10 @@ var Htmler = (function () {
 				}
 			}
 		}
+		else if (this.context === Watch.Context.ELEMENT_CLASS_LIST) {
+			this.targetElement.className = "";
+			Htmler.applyClasses(this.targetElement, currentArray.array);
+		}
 	}
 
 	function ObjectWatch(store, propName) {
@@ -269,6 +334,12 @@ var Htmler = (function () {
 				this.targetElement = null;
 			}
 		}
+		else if (this.context === Watch.Context.ELEMENT_STYLE_OBJECT) {
+			Htmler.applyStyles(this.targetElement, currentObj.obj);
+		}
+		else if (this.context === Watch.Context.ELEMENT_ATTRIBUTE_OBJECT) {
+			Htmler.applyAttrs(this.targetElement, currentObj.obj);
+		}
 	}
 
 	function Store(watches) {
@@ -300,7 +371,7 @@ var Htmler = (function () {
 		var propType = typeof property;
 		var watch = null;
 
-		if (propType === 'object' || propType === 'function') {
+		if (typeof property === 'object') {
 			if (property instanceof ArrayStore) {
 				watch = new ArrayWatch(this, propName);
 			}
@@ -308,13 +379,28 @@ var Htmler = (function () {
 				watch = new ObjectWatch(this, propName);
 			}
 		}
-		else if (propType === 'string' || propType === 'number' || propType === 'boolean') {
+		else {
 			watch = new ValueWatch(this, propName);
 		}
 
 		if (watch) {
 			watch.setChangeFunc(_changeFunc);
-			this.watches.push(watch);
+
+			var existingWatchIdx = -1;
+			//TODO prevent adding duplicate watches by removing watches bound to an element that is removed
+			/*for (var i = 0; i < this.watches.length; i++) {
+				if (this.watches[i].propName === propName) {
+					existingWatchIdx = i;
+					break;
+				}
+			}*/
+
+			if (existingWatchIdx >= 0) {
+				this.watches[existingWatchIdx] = watch;
+			}
+			else {
+				this.watches.push(watch);
+			}
 		}
 
 		return watch;
@@ -359,7 +445,7 @@ var Htmler = (function () {
 		if (this.array[idx] instanceof Array) {
 			this.subStores[idx] = new ArrayStore(this.array[idx]);
 		}
-		else if (this.array[idx].constructor.name === 'Object') {
+		else if (isObjectLiteral(this.array[idx])) {
 			this.subStores[idx] = new ObjectStore(this.array[idx]);
 		}
 
@@ -368,6 +454,9 @@ var Htmler = (function () {
 				set: function (val) {
 					if (this.isLocked()) {
 						throw new Error("Tried to modify locked store");
+					}
+					if (!this.array.hasOwnProperty(idx)) {
+						throw new Error("Tried to set undefined property");
 					}
 
 					if (val instanceof ArrayStore) {
@@ -383,7 +472,7 @@ var Htmler = (function () {
 						this.subStores[idx].replaceArray(val);
 						this.array[idx] = val;
 					}
-					else if (val.constructor.name === 'Object') {
+					else if (isObjectLiteral(val)) {
 						//this.subStores[idx] = new ObjectStore(val, this.subStores[idx].watches);
 						this.subStores[idx].replaceObj(val);
 						this.array[idx] = val;
@@ -451,14 +540,19 @@ var Htmler = (function () {
 		if (this.oldArrayIds.length !== this.array.length) return true;
 
 		for (var i = 0; i < this.array.length; i++) {
-			if (this.oldArrayIds[i] !== this.array[i].uniqueId) return true;
+			if (this.array[i] === null) {
+				if (!(this.oldArrayIds[i] == null && this.array[i] == null)) return true;
+			}
+			else {
+				if (this.oldArrayIds[i] !== this.array[i].uniqueId) return true;
+			}
 		}
 
 		return false;
 	}
 
 	ArrayStore.prototype.sync = function () {
-		this.oldArrayIds = this.array.map(function (item) { return item.uniqueId; });
+		this.oldArrayIds = this.array.map(function (item) { return item != null ? item.uniqueId : null; });
 	}
 
 	function ObjectStore(obj, watches) {
@@ -486,7 +580,7 @@ var Htmler = (function () {
 		if (this.obj[key] instanceof Array) {
 			this.subStores[key] = new ArrayStore(this.obj[key]);
 		}
-		else if (this.obj[key].constructor.name === 'Object') {
+		else if (isObjectLiteral(this.obj[key])) {
 			this.subStores[key] = new ObjectStore(this.obj[key]);
 		}
 
@@ -495,6 +589,9 @@ var Htmler = (function () {
 				set: function (val) {
 					if (this.isLocked()) {
 						throw new Error("Tried to modify locked store");
+					}
+					if (!this.obj.hasOwnProperty(key)) {
+						throw new Error("Tried to set undefined property");
 					}
 
 					if (val instanceof ArrayStore) {
@@ -510,7 +607,7 @@ var Htmler = (function () {
 						this.subStores[key].replaceArray(val);
 						this.obj[key] = val;
 					}
-					else if (val.constructor.name === 'Object') {
+					else if (isObjectLiteral(val)) {
 						//this.subStores[key] = new ObjectStore(val, this.subStores[key].watches);
 						this.subStores[key].replaceObj(val);
 						this.obj[key] = val;
@@ -531,16 +628,24 @@ var Htmler = (function () {
 	ObjectStore.prototype.didChange = function () {
 		if (this.oldObjIds === null) return true;
 
-		for (var key in this.obj) {
-			if (this.oldObjIds[key] !== this.obj[key].uniqueId) return true;
+		for (var i = 0, keys = Object.keys(this.obj); i < keys.length; i++) {
+			var key = keys[i];
+			if (this[key] instanceof Store && this[key].didChange()) return true;
+			if (this.obj[key] == null) {
+				if (!(this.oldObjIds[key] == null && this.obj[key] == null)) return true;
+			}
+			else {
+				if (this.oldObjIds[key] !== this.obj[key].uniqueId) return true;
+			}
 		}
 		return false;
 	}
 
 	ObjectStore.prototype.sync = function () {
 		this.oldObjIds = {};
-		for (var key in this.obj) {
-			this.oldObjIds[key] = this.obj[key].uniqueId;
+		for (var i = 0, keys = Object.keys(this.obj); i < keys.length; i++) {
+			var key = keys[i];
+			this.oldObjIds[key] = this.obj[key] != null ? this.obj[key].uniqueId : null;
 		}
 	}
 
@@ -556,13 +661,12 @@ var Htmler = (function () {
 		custom: function (arg) {
 			return function (parent, attrs) {
 				var argValue = typeof arg === 'function' ? arg(parent) : arg;
-
 				if (argValue instanceof ObjectWatch) {
 					var watch = argValue;
 					if (watch.getValue() instanceof Element) {
 						var element = parent.appendChild(watch.getValue());
 						watch.setContext(Watch.Context.ELEMENT);
-						watch.setTarget(element);
+						watch.setTargetElement(element);
 						watch.update();
 					}
 				}
@@ -594,7 +698,7 @@ var Htmler = (function () {
 					var textNode = document.createTextNode(text);
 					var element = parent.appendChild(textNode);
 					watch.setContext(Watch.Context.TEXT);
-					watch.setTarget(element);
+					watch.setTargetElement(element);
 					watch.update();
 				}
 				else {
@@ -612,7 +716,7 @@ var Htmler = (function () {
 					var watch = data;
 					watch.setBuildFunc(buildFunc);
 					watch.setContext(Watch.Context.REPEAT);
-					watch.setTarget(parent.appendChild(document.createComment('')));
+					watch.setTargetElement(parent.appendChild(document.createComment('')));
 					watch.update();
 				}
 				else if (data instanceof Array || data instanceof ArrayStore) {

@@ -53,13 +53,13 @@ window.onload = function () {
 	('/div')
 
 	var box1 = htmler()
-	('div', {style: [styles.child, {'background-color': 'red'}],
+	('div', {style: {'background-color': 'red', 'width': '64px', 'height': '64px'},
 		onclick: function (e) { boxStore.element = box2; }
 	})
 	('/div')
 
 	var box2 = htmler()
-	('div', {style: [styles.child, {'background-color': 'green'}],
+	('div', {style: {'background-color': 'green', 'width': '64px', 'height': '64px'},
 		onclick: function (e) { boxStore.element = box1; }
 	})
 	('/div')
