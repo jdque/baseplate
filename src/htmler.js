@@ -114,14 +114,19 @@ var Htmler = (function () {
 			for (var i = 0, keys = Object.keys(attrsObj); i < keys.length; i++) {
 				var name = keys[i];
 				var value = attrsObj[name];
-				if (value instanceof ValueWatch) {
+				if (value instanceof Watch) {
 					value.setContext(Watch.Context.ELEMENT_ATTRIBUTE);
 					value.setTargetElement(elem);
 					value.targetAttrName = name;
 					value.update();
 				}
 				else {
-					elem.setAttribute(name, value);
+					if (isFalsey(value)) {
+						elem.removeAttribute(name, value);
+					}
+					else {
+						elem.setAttribute(name, value);
+					}
 				}
 			}
 		}
@@ -172,6 +177,10 @@ var Htmler = (function () {
 
 	function isObjectLiteral(obj) {
 		return obj != null && typeof obj === 'object' && obj.constructor.name === 'Object';
+	}
+
+	function isFalsey(val) {
+		return val == null || val === false;
 	}
 
 	function updateStores() {
@@ -227,25 +236,27 @@ var Htmler = (function () {
 	ValueWatch.prototype.update = function () {
 		var currentVal = this.getValue();
 		var oldVal = currentVal; //TODO
+		var setVal = currentVal;
+		if (this.changeFunc) {
+			this.sourceStore.lock();
+			setVal = this.changeFunc(currentVal, oldVal, this.targetElement);
+			this.sourceStore.unlock();
+		}
 
 		if (this.context === Watch.Context.TEXT) {
-			if (this.changeFunc) {
-				this.sourceStore.lock();
-				this.targetElement.nodeValue = this.changeFunc(currentVal, oldVal, this.targetElement);
-				this.sourceStore.unlock();
-			}
-			else {
-				this.targetElement.nodeValue = currentVal;
-			}
+			this.targetElement.nodeValue = setVal;
 		}
 		else if (this.context === Watch.Context.ELEMENT_ATTRIBUTE) {
-			this.targetElement.setAttribute(this.targetAttrName, currentVal);
+			if (isFalsey(setVal))
+				this.targetElement.removeAttribute(this.targetAttrName);
+			else
+				this.targetElement.setAttribute(this.targetAttrName, setVal);
 		}
 		else if (this.context === Watch.Context.ELEMENT_PROPERTY) {
-			this.targetElement[this.targetPropName] = currentVal;
+			this.targetElement[this.targetPropName] = setVal;
 		}
 		else if (this.context === Watch.Context.ELEMENT_STYLE_PROPERTY) {
-			this.targetElement.style[this.targetStylePropName] = currentVal;
+			this.targetElement.style[this.targetStylePropName] = setVal;
 		}
 	}
 
@@ -263,37 +274,53 @@ var Htmler = (function () {
 
 	ArrayWatch.prototype.update = function () {
 		var currentArray = this.getValue();
-		var oldChildIds = currentArray.oldArrayIds || [];
+		var oldArrayIds = currentArray.oldArrayIds || [];
+		var setVal = currentArray;
+		if (this.changeFunc) {
+			this.sourceStore.lock();
+			setVal = this.changeFunc(currentArray.length, oldArrayIds.length, this.targetElement);
+			this.sourceStore.unlock();
+		}
 
 		if (this.context === Watch.Context.TEXT) {
-			if (this.changeFunc) {
-				this.sourceStore.lock();
-				this.targetElement.nodeValue = this.changeFunc(currentArray.length, oldChildIds.length, this.targetElement);
-				this.sourceStore.unlock();
-			}
-			else {
-				this.targetElement.nodeValue = currentArray;
-			}
+			this.targetElement.nodeValue = setVal;
 		}
 		else if (this.context === Watch.Context.REPEAT) {
 			var parent = this.targetElement.parentNode;
-			for (var i = 0; i < oldChildIds.length; i++) {
+			for (var i = 0; i < oldArrayIds.length; i++) {
 				if (this.targetElement.nextSibling) {
 					parent.removeChild(this.targetElement.nextSibling);
 				}
 			}
-			for (var i = currentArray.length - 1; i >= 0; i--) {
-				if (this.targetElement.nextSibling) {
-					parent.insertBefore(this.buildFunc(currentArray.subStores[i], i), this.targetElement.nextSibling);
-				}
-				else {
-					parent.appendChild(this.buildFunc(currentArray.subStores[i], i));
+
+			if (setVal instanceof ArrayStore) {
+				for (var i = setVal.length - 1; i >= 0; i--) {
+					if (this.targetElement.nextSibling) {
+						parent.insertBefore(this.buildFunc(setVal.subStores[i], i), this.targetElement.nextSibling);
+					}
+					else {
+						parent.appendChild(this.buildFunc(setVal.subStores[i], i));
+					}
 				}
 			}
 		}
+		else if (this.context === Watch.Context.ELEMENT_ATTRIBUTE) {
+			if (isFalsey(setVal))
+				this.targetElement.removeAttribute(this.targetAttrName);
+			else
+				this.targetElement.setAttribute(this.targetAttrName, setVal);
+		}
+		else if (this.context === Watch.Context.ELEMENT_PROPERTY) {
+			this.targetElement[this.targetPropName] = setVal;
+		}
+		else if (this.context === Watch.Context.ELEMENT_STYLE_PROPERTY) {
+			this.targetElement.style[this.targetStylePropName] = setVal;
+		}
 		else if (this.context === Watch.Context.ELEMENT_CLASS_LIST) {
-			this.targetElement.className = "";
-			Htmler.applyClasses(this.targetElement, currentArray.array);
+			if (setVal instanceof ArrayStore) {
+				this.targetElement.className = "";
+				Htmler.applyClasses(this.targetElement, setVal.array);
+			}
 		}
 	}
 
@@ -306,28 +333,20 @@ var Htmler = (function () {
 	ObjectWatch.prototype.update = function () {
 		var currentObj = this.getValue();
 		var oldObj = currentObj; //TODO
+		var setVal = currentObj;
+		if (this.changeFunc) {
+			this.sourceStore.lock();
+			setVal = this.changeFunc(currentObj, oldObj, this.targetElement);
+			this.sourceStore.unlock();
+		}
 
 		if (this.context === Watch.Context.TEXT) {
-			if (this.changeFunc) {
-				this.sourceStore.lock();
-				this.targetElement.nodeValue = this.changeFunc(currentObj, oldObj, this.targetElement);
-				this.sourceStore.unlock();
-			}
-			else {
-				this.targetElement.nodeValue = currentObj;
-			}
+			this.targetElement.nodeValue = setVal;
 		}
 		else if (this.context === Watch.Context.ELEMENT) {
-			if (currentObj instanceof Element) {
-				if (this.changeFunc) {
-					this.sourceStore.lock();
-					this.targetElement.parentNode.replaceChild(this.changeFunc(currentObj, oldObj, this.targetElement), this.targetElement);
-					this.sourceStore.unlock();
-				}
-				else {
-					this.targetElement.parentNode.replaceChild(currentObj, this.targetElement);
-				}
-				this.targetElement = currentObj;
+			if (setVal instanceof Element) {
+				this.targetElement.parentNode.replaceChild(setVal, this.targetElement);
+				this.targetElement = setVal;
 			}
 			else {
 				this.targetElement.parentNode.removeChild(this.targetElement);
@@ -335,10 +354,14 @@ var Htmler = (function () {
 			}
 		}
 		else if (this.context === Watch.Context.ELEMENT_STYLE_OBJECT) {
-			Htmler.applyStyles(this.targetElement, currentObj.obj);
+			if (setVal instanceof ObjectStore) {
+				Htmler.applyStyles(this.targetElement, setVal.obj);
+			}
 		}
 		else if (this.context === Watch.Context.ELEMENT_ATTRIBUTE_OBJECT) {
-			Htmler.applyAttrs(this.targetElement, currentObj.obj);
+			if (setVal instanceof ObjectStore) {
+				Htmler.applyAttrs(this.targetElement, setVal.obj);
+			}
 		}
 	}
 
