@@ -34,6 +34,14 @@ var Htmler = (function () {
 			return this.selfFunc;
 		}
 
+		if (tag instanceof Array) {
+			tag.forEach(function (text) {
+				var textNode = document.createTextNode(text);
+				this.getCurrentElem().appendChild(textNode);
+			}, this);
+			return this.selfFunc;
+		}
+
 		//append pre-built element if tag argument is a reference
 		if (tag instanceof Node) {
 			Htmler.applyProps(tag, props);
@@ -195,6 +203,9 @@ var Htmler = (function () {
 		this.context = null;
 		this.targetElement = null;
 		this.changeFunc = null;
+
+		this.patternFunc = null;
+		this.patterns = [];
 	}
 
 	Watch.Context = {
@@ -209,16 +220,42 @@ var Htmler = (function () {
 		REPEAT: 8
 	}
 
+	Watch.clone = function (watch) {
+		var newWatch;
+		if (watch instanceof ValueWatch) newWatch = new ValueWatch(watch.sourceStore, watch.propName);
+		else if (watch instanceof ArrayWatch) newWatch = new ArrayWatch(watch.sourceStore, watch.propName);
+		else if (watch instanceof Objectwatch) newWatch = new Objectwatch(watch.sourceStore, watch.propName);
+		newWatch.context = watch.context;
+		newWatch.targetElement = watch.targetElement;
+		newWatch.changeFunc = watch.changeFunc;
+		newWatch.patternFunc = watch.patternFunc;
+		newWatch.patterns = watch.patterns;
+
+		//TODO
+		newWatch.buildFunc = watch.buildFunc;
+		newWatch.targetAttrName = watch.targetAttrName;
+		newWatch.targetPropName = watch.targetPropName;
+		newWatch.targetStylePropName = watch.targetStylePropName;
+
+		return newWatch;
+	}
+
+	Watch.prototype.transform = function (changeFunc) {
+		this.changeFunc = typeof changeFunc === 'function' ? changeFunc : null;
+		return this;
+	}
+
+	Watch.prototype.pattern = function () {
+		this.patterns = arguments;
+		return this;
+	}
+
 	Watch.prototype.setContext = function (context) {
 		this.context = context;
 	}
 
 	Watch.prototype.setTargetElement = function (element) {
 		this.targetElement = element;
-	}
-
-	Watch.prototype.setChangeFunc = function (changeFunc) {
-		this.changeFunc = changeFunc;
 	}
 
 	Watch.prototype.getValue = function () {
@@ -240,6 +277,11 @@ var Htmler = (function () {
 		if (this.changeFunc) {
 			this.sourceStore.lock();
 			setVal = this.changeFunc(currentVal, oldVal, this.targetElement);
+			this.sourceStore.unlock();
+		}
+		if (this.patternFunc) {
+			this.sourceStore.lock();
+			setVal = this.patternFunc(setVal);
 			this.sourceStore.unlock();
 		}
 
@@ -278,7 +320,12 @@ var Htmler = (function () {
 		var setVal = currentArray;
 		if (this.changeFunc) {
 			this.sourceStore.lock();
-			setVal = this.changeFunc(currentArray.length, oldArrayIds.length, this.targetElement);
+			setVal = this.changeFunc(currentArray, currentArray /*TODO*/, this.targetElement);
+			this.sourceStore.unlock();
+		}
+		if (this.patternFunc) {
+			this.sourceStore.lock();
+			setVal = this.patternFunc(setVal);
 			this.sourceStore.unlock();
 		}
 
@@ -339,6 +386,11 @@ var Htmler = (function () {
 			setVal = this.changeFunc(currentObj, oldObj, this.targetElement);
 			this.sourceStore.unlock();
 		}
+		if (this.patternFunc) {
+			this.sourceStore.lock();
+			setVal = this.patternFunc(setVal);
+			this.sourceStore.unlock();
+		}
 
 		if (this.context === Watch.Context.TEXT) {
 			this.targetElement.nodeValue = setVal;
@@ -388,8 +440,7 @@ var Htmler = (function () {
 
 	Store.prototype.sync = function () { /*implement me*/ }
 
-	Store.prototype.obs = function (propName, _changeFunc) {
-		_changeFunc = typeof _changeFunc === 'function' ? _changeFunc : null;
+	Store.prototype.obs = function (propName) {
 		var property = this[propName];
 		var propType = typeof property;
 		var watch = null;
@@ -407,8 +458,6 @@ var Htmler = (function () {
 		}
 
 		if (watch) {
-			watch.setChangeFunc(_changeFunc);
-
 			var existingWatchIdx = -1;
 			//TODO prevent adding duplicate watches by removing watches bound to an element that is removed
 			/*for (var i = 0; i < this.watches.length; i++) {
@@ -429,8 +478,8 @@ var Htmler = (function () {
 		return watch;
 	}
 
-	Store.prototype.updateWatches = function () {
-		if (this.didChange()) {
+	Store.prototype.updateWatches = function (force) {
+		if (this.didChange() || force) {
 			for (var i = 0; i < this.watches.length; i++) {
 				this.watches[i].update();
 			}
@@ -438,7 +487,7 @@ var Htmler = (function () {
 		}
 
 		for (var key in this.subStores) {
-			this.subStores[key].updateWatches();
+			this.subStores[key].updateWatches(force);
 		}
 	}
 
@@ -563,7 +612,7 @@ var Htmler = (function () {
 		if (this.oldArrayIds.length !== this.array.length) return true;
 
 		for (var i = 0; i < this.array.length; i++) {
-			if (this.array[i] === null) {
+			if (this.array[i] == null) {
 				if (!(this.oldArrayIds[i] == null && this.array[i] == null)) return true;
 			}
 			else {
@@ -767,10 +816,38 @@ var Htmler = (function () {
 			return newStore;
 		},
 
-		obs: function (store, prop, _changeFunc) {
+		obs: function (store, prop) {
 			if (store instanceof Store) {
-				return store.obs(prop, _changeFunc);
+				return store.obs(prop);
 			}
+		},
+
+		match: function (watch, usePatterns, defaultVal) {
+			var newWatch = Watch.clone(watch);
+			newWatch.sourceStore.watches.push(newWatch);
+			newWatch.patternFunc = function (currentVal) {
+				var computedVal = undefined;
+				for (var i = 0; i < newWatch.patterns.length; i++) {
+					var pattern = newWatch.patterns[i];
+					for (var j = 0, keys = Object.keys(pattern); j < keys.length; j++) {
+						var name = keys[j];
+						if (usePatterns.hasOwnProperty(name)) {
+							var matches =
+								(typeof pattern[name] === 'function' && pattern[name](currentVal) === true) ||
+								(pattern[name] === currentVal);
+
+							if (matches) {
+								computedVal = usePatterns[name];
+								break;
+							}
+						}
+					}
+					if (computedVal !== undefined) break;
+				}
+				return computedVal !== undefined ? computedVal : defaultVal;
+			}
+
+			return newWatch;
 		}
 	};
 
