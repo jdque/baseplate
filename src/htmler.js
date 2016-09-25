@@ -748,7 +748,7 @@ var Htmler = (function () {
 			};
 		},
 
-		promise: function (buildFunc) {
+		defer: function (buildFunc) {
 			return function (parent, attrs) {
 				var placeholderElement = document.createComment('');
 				parent.appendChild(placeholderElement);

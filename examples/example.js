@@ -1,7 +1,7 @@
 window.onload = function () {
 	var html = Htmler.html,
 		custom = Htmler.custom,
-		promise = Htmler.promise,
+		defer = Htmler.defer,
 		text = Htmler.text,
 		repeat = Htmler.repeat,
 		make_store = Htmler.make_store,
@@ -100,7 +100,7 @@ window.onload = function () {
 			return z;
 		}))
 		('br /')
-		(promise(function (done) {
+		(defer(function (done) {
 			window.setTimeout(function () {
 				done(box);
 			}, 2000);
