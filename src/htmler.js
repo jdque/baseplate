@@ -721,134 +721,143 @@ var Htmler = (function () {
 		}
 	}
 
-	var exports = {
-		html: function () {
-			if (!isObserving) {
-				isObserving = true;
-				updateStores();
-			}
-			return new Htmler();
-		},
+	function html() {
+		if (!isObserving) {
+			isObserving = true;
+			updateStores();
+		}
+		return new Htmler();
+	}
 
-		custom: function (arg) {
-			return function (parent, attrs) {
-				var argValue = typeof arg === 'function' ? arg(parent) : arg;
-				if (argValue instanceof ObjectWatch) {
-					var watch = argValue;
-					if (watch.getValue() instanceof Element) {
-						var element = parent.appendChild(watch.getValue());
-						watch.setContext(Watch.Context.ELEMENT);
-						watch.setTargetElement(element);
-						watch.update();
-					}
-				}
-				else if (argValue instanceof Element) {
-					parent.appendChild(argValue);
-				}
-			};
-		},
-
-		defer: function (buildFunc) {
-			return function (parent, attrs) {
-				var placeholderElement = document.createComment('');
-				parent.appendChild(placeholderElement);
-
-				var doneFunc = function (element) {
-					parent.replaceChild(element, placeholderElement);
-				};
-				buildFunc(doneFunc);
-			}
-		},
-
-		text: function (arg) {
-			return function (parent, attrs) {
-				var argValue = typeof arg === 'function' ? arg(parent) : arg;
-
-				if (argValue instanceof Watch) {
-					var watch = argValue;
-					var text = watch.getValue();
-					var textNode = document.createTextNode(text);
-					var element = parent.appendChild(textNode);
-					watch.setContext(Watch.Context.TEXT);
+	function custom(arg) {
+		return function (parent, attrs) {
+			var argValue = typeof arg === 'function' ? arg(parent) : arg;
+			if (argValue instanceof ObjectWatch) {
+				var watch = argValue;
+				if (watch.getValue() instanceof Element) {
+					var element = parent.appendChild(watch.getValue());
+					watch.setContext(Watch.Context.ELEMENT);
 					watch.setTargetElement(element);
 					watch.update();
 				}
-				else {
-					var textNode = document.createTextNode(argValue);
-					parent.appendChild(textNode);
-				}
 			}
-		},
+			else if (argValue instanceof Element) {
+				parent.appendChild(argValue);
+			}
+		};
+	}
 
-		repeat: function (buildFunc) {
-			buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
-			return function (parent, attrs) {
-				var data = typeof attrs.data === 'function' ? attrs.data(parent) : attrs.data;
-				if (data instanceof ArrayWatch) {
-					var watch = data;
-					watch.setBuildFunc(buildFunc);
-					watch.setContext(Watch.Context.REPEAT);
-					watch.setTargetElement(parent.appendChild(document.createComment('')));
-					watch.update();
-				}
-				else if (data instanceof Array || data instanceof ArrayStore) {
-					for (var i = 0; i < data.length; i++) {
-						parent.appendChild(buildFunc(data[i], i));
-					}
-				}
+	function defer(buildFunc) {
+		return function (parent, attrs) {
+			var placeholderElement = document.createComment('');
+			parent.appendChild(placeholderElement);
+
+			var doneFunc = function (element) {
+				parent.replaceChild(element, placeholderElement);
 			};
-		},
+			buildFunc(doneFunc);
+		}
+	}
 
-		make_store: function (obj) {
-			var newStore = null;
-			if (typeof obj === 'object') {
-				if (obj instanceof Array) {
-					newStore = new ArrayStore(obj);
-					newStore.sync();
-					stores.push(newStore);
-				}
-				else {
-					newStore = new ObjectStore(obj);
-					newStore.sync();
-					stores.push(newStore);
+	function text(arg) {
+		return function (parent, attrs) {
+			var argValue = typeof arg === 'function' ? arg(parent) : arg;
+
+			if (argValue instanceof Watch) {
+				var watch = argValue;
+				var text = watch.getValue();
+				var textNode = document.createTextNode(text);
+				var element = parent.appendChild(textNode);
+				watch.setContext(Watch.Context.TEXT);
+				watch.setTargetElement(element);
+				watch.update();
+			}
+			else {
+				var textNode = document.createTextNode(argValue);
+				parent.appendChild(textNode);
+			}
+		}
+	}
+
+	function repeat(buildFunc) {
+		buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
+		return function (parent, attrs) {
+			var data = typeof attrs.data === 'function' ? attrs.data(parent) : attrs.data;
+			if (data instanceof ArrayWatch) {
+				var watch = data;
+				watch.setBuildFunc(buildFunc);
+				watch.setContext(Watch.Context.REPEAT);
+				watch.setTargetElement(parent.appendChild(document.createComment('')));
+				watch.update();
+			}
+			else if (data instanceof Array || data instanceof ArrayStore) {
+				for (var i = 0; i < data.length; i++) {
+					parent.appendChild(buildFunc(data[i], i));
 				}
 			}
-			return newStore;
-		},
+		};
+	}
 
-		obs: function (store, prop) {
-			if (store instanceof Store) {
-				return store.obs(prop);
+	function make_store(obj) {
+		var newStore = null;
+		if (typeof obj === 'object') {
+			if (obj instanceof Array) {
+				newStore = new ArrayStore(obj);
+				newStore.sync();
+				stores.push(newStore);
 			}
-		},
+			else {
+				newStore = new ObjectStore(obj);
+				newStore.sync();
+				stores.push(newStore);
+			}
+		}
+		return newStore;
+	}
 
-		match: function (watch, usePatterns, defaultVal) {
-			var newWatch = Watch.clone(watch);
-			newWatch.sourceStore.watches.push(newWatch);
-			newWatch.patternFunc = function (currentVal) {
-				var computedVal = undefined;
-				for (var i = 0; i < newWatch.patterns.length; i++) {
-					var pattern = newWatch.patterns[i];
-					for (var j = 0, keys = Object.keys(pattern); j < keys.length; j++) {
-						var name = keys[j];
-						if (usePatterns.hasOwnProperty(name)) {
-							var matches =
-								(typeof pattern[name] === 'function' && pattern[name](currentVal) === true) ||
-								(pattern[name] === currentVal);
+	function obs(store, prop) {
+		if (store instanceof Store) {
+			return store.obs(prop);
+		}
+	}
 
-							if (matches) {
-								computedVal = usePatterns[name];
-								break;
-							}
+	function match(watch, usePatterns, defaultVal) {
+		var newWatch = Watch.clone(watch);
+		newWatch.sourceStore.watches.push(newWatch);
+		newWatch.patternFunc = function (currentVal) {
+			var computedVal = undefined;
+			for (var i = 0; i < newWatch.patterns.length; i++) {
+				var pattern = newWatch.patterns[i];
+				for (var j = 0, keys = Object.keys(pattern); j < keys.length; j++) {
+					var name = keys[j];
+					if (usePatterns.hasOwnProperty(name)) {
+						var matches =
+							(typeof pattern[name] === 'function' && pattern[name](currentVal) === true) ||
+							(pattern[name] === currentVal);
+
+						if (matches) {
+							computedVal = usePatterns[name];
+							break;
 						}
 					}
-					if (computedVal !== undefined) break;
 				}
-				return computedVal !== undefined ? computedVal : defaultVal;
+				if (computedVal !== undefined) break;
 			}
-
-			return newWatch;
+			return computedVal !== undefined ? computedVal : defaultVal;
 		}
+
+		return newWatch;
+	}
+
+	var exports = {
+		html: html,
+		custom: custom,
+		defer: defer,
+		text: text,
+		repeat: repeat,
+		make_store: make_store,
+		obs: obs,
+		match: match
 	};
 
 	return exports;
