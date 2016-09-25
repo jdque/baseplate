@@ -36,8 +36,8 @@ var Htmler = (function () {
 
 		if (tag instanceof Array) {
 			tag.forEach(function (text) {
-				var textNode = document.createTextNode(text);
-				this.getCurrentElem().appendChild(textNode);
+				var textFunc = bp_text(text);
+				textFunc(this.getCurrentElem(), props);
 			}, this);
 			return this.selfFunc;
 		}
@@ -721,7 +721,7 @@ var Htmler = (function () {
 		}
 	}
 
-	function html() {
+	function bp_html() {
 		if (!isObserving) {
 			isObserving = true;
 			updateStores();
@@ -729,7 +729,7 @@ var Htmler = (function () {
 		return new Htmler();
 	}
 
-	function custom(arg) {
+	function bp_custom(arg) {
 		return function (parent, attrs) {
 			var argValue = typeof arg === 'function' ? arg(parent) : arg;
 			if (argValue instanceof ObjectWatch) {
@@ -747,7 +747,7 @@ var Htmler = (function () {
 		};
 	}
 
-	function defer(buildFunc) {
+	function bp_defer(buildFunc) {
 		return function (parent, attrs) {
 			var placeholderElement = document.createComment('');
 			parent.appendChild(placeholderElement);
@@ -759,7 +759,7 @@ var Htmler = (function () {
 		}
 	}
 
-	function text(arg) {
+	function bp_text(arg) {
 		return function (parent, attrs) {
 			var argValue = typeof arg === 'function' ? arg(parent) : arg;
 
@@ -779,7 +779,7 @@ var Htmler = (function () {
 		}
 	}
 
-	function repeat(buildFunc) {
+	function bp_repeat(buildFunc) {
 		buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
 		return function (parent, attrs) {
 			var data = typeof attrs.data === 'function' ? attrs.data(parent) : attrs.data;
@@ -798,7 +798,7 @@ var Htmler = (function () {
 		};
 	}
 
-	function make_store(obj) {
+	function bp_make_store(obj) {
 		var newStore = null;
 		if (typeof obj === 'object') {
 			if (obj instanceof Array) {
@@ -815,13 +815,13 @@ var Htmler = (function () {
 		return newStore;
 	}
 
-	function obs(store, prop) {
+	function bp_obs(store, prop) {
 		if (store instanceof Store) {
 			return store.obs(prop);
 		}
 	}
 
-	function match(watch, usePatterns, defaultVal) {
+	function bp_match(watch, usePatterns, defaultVal) {
 		var newWatch = Watch.clone(watch);
 		newWatch.sourceStore.watches.push(newWatch);
 		newWatch.patternFunc = function (currentVal) {
@@ -850,14 +850,14 @@ var Htmler = (function () {
 	}
 
 	var exports = {
-		html: html,
-		custom: custom,
-		defer: defer,
-		text: text,
-		repeat: repeat,
-		make_store: make_store,
-		obs: obs,
-		match: match
+		html: bp_html,
+		custom: bp_custom,
+		defer: bp_defer,
+		text: bp_text,
+		repeat: bp_repeat,
+		make_store: bp_make_store,
+		obs: bp_obs,
+		match: bp_match
 	};
 
 	return exports;
