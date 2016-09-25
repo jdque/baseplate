@@ -722,7 +722,7 @@ var Htmler = (function () {
 	}
 
 	var exports = {
-		htmler: function () {
+		html: function () {
 			if (!isObserving) {
 				isObserving = true;
 				updateStores();

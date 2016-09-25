@@ -23,6 +23,12 @@ window.onload = function () {
         }
     });
 
+    var testStore = bp.make_store({
+        func: function () { console.log ("A"); },
+        style: {'background-color': 'green'},
+        classes: ['myclass']
+    });
+
     function addTodo(done, title) {
         store.list.push({
             done: done,
@@ -48,7 +54,7 @@ window.onload = function () {
             deleteTodo(item);
         };
 
-        return bp.htmler()
+        return bp.html()
         ('div')
             ('input', {type: 'checkbox', checked: bp.obs(item, 'done'), onchange: checkboxChanged, style: styles.todo})
             ('p', {class: 'title', onclick: textClicked})(bp.text(bp.obs(item, 'title')))('/p')
@@ -66,12 +72,12 @@ window.onload = function () {
             return false;
         };
 
-        var list = bp.htmler()
+        var list = bp.html()
         ('div', {class: "todos"})
             (bp.repeat(todoItem), {data: bp.obs(store, 'list')})
         ('/div');
 
-        var form = bp.htmler()
+        var form = bp.html()
         ('form', {onsubmit: formSubmitted})
             ('input', {
                 placeholder: 'Something to do',
@@ -81,14 +87,27 @@ window.onload = function () {
             ('button')(bp.text("Add"))('/button')
         ('/form');
 
-        var tree = bp.htmler()
+        var tree = bp.html()
         ('div')
             ('div', {onclick: function () {treeStore.a += 1;}})(bp.text("a: "))(bp.text(bp.obs(treeStore, 'a')))('/div')
             ('div', {onclick: function () {treeStore.b.c += 1;}})(bp.text("b.c: "))(bp.text(bp.obs(treeStore.b, 'c')))('/div')
             ('div', {onclick: function () {treeStore.b.d = {e: treeStore.b.d.e + 1}}})(bp.text("b.d.e: "))(bp.text(bp.obs(treeStore.b.d, 'e')))('/div')
         ('/div')
 
-        return bp.htmler()
+        var test = bp.html()
+        ('div')
+            ('div', {
+                classList: bp.obs(testStore, 'classes'),
+                //style: bp.obs(testStore, 'style'),
+                onclick: function () {
+                    if (testStore.classes.length > 1) testStore.classes.splice(1, 1);
+                    else testStore.classes.push('another');
+                }})
+                (bp.text('hello world'))
+            ('/div')
+        ('/div')
+
+        return bp.html()
         ('div')
             ('h1')(bp.text("Todo"))('/h1')
             (list)
@@ -100,6 +119,9 @@ window.onload = function () {
             ('br /')
             ('br /')
             (tree)
+            ('br /')
+            ('br /')
+            (test)
         ('/div');
     }
 

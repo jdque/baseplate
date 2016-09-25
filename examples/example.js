@@ -1,5 +1,5 @@
 window.onload = function () {
-	var htmler = Htmler.htmler,
+	var html = Htmler.html,
 		custom = Htmler.custom,
 		promise = Htmler.promise,
 		text = Htmler.text,
@@ -48,17 +48,17 @@ window.onload = function () {
 		bold: {'font-weight': 'bold'}
 	};
 
-	var box = htmler()
+	var box = html()
 	('div', {style: styles.child})
 	('/div')
 
-	var box1 = htmler()
+	var box1 = html()
 	('div', {style: {'background-color': 'red', 'width': '64px', 'height': '64px'},
 		onclick: function (e) { boxStore.element = box2; }
 	})
 	('/div')
 
-	var box2 = htmler()
+	var box2 = html()
 	('div', {style: {'background-color': 'green', 'width': '64px', 'height': '64px'},
 		onclick: function (e) { boxStore.element = box1; }
 	})
@@ -68,7 +68,7 @@ window.onload = function () {
 		element: box1
 	});
 
-	var stuff = htmler()
+	var stuff = html()
 	('div', {id: 'container1', style: styles.container})
 		('div')
 			(text(data.name))
@@ -79,7 +79,7 @@ window.onload = function () {
 		('ul')
 			(repeat(function (item, idx) {
 				var bg = idx % 2 === 0 ? 'grey' : 'white'
-				return htmler()
+				return html()
 				('li', {style: {'font-weight': 'bold', 'background-color': bg}})
 					('span')(text(item.label))('/span')
 					('br /')
@@ -149,7 +149,7 @@ window.onload = function () {
 		('div')
 			(text("HEADER"))
 			(repeat(function (item, idx) {
-				return htmler()
+				return html()
 				('div')
 					(text(obs(item, 'label')))
 					(text(' '))
@@ -159,7 +159,7 @@ window.onload = function () {
 			}), {data: obs(store, 'list')})
 			(text("-----------"))
 			(repeat(function (item, idx) {
-				return htmler()
+				return html()
 				('div')
 					(text(obs(item, 'label')))
 					(text(' '))
