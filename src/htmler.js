@@ -34,11 +34,23 @@ var Htmler = (function () {
 			return this.selfFunc;
 		}
 
+		//shorthand for text element
 		if (tag instanceof Array) {
 			tag.forEach(function (text) {
 				var textFunc = bp_text(text);
 				textFunc(this.getCurrentElem(), props);
 			}, this);
+			return this.selfFunc;
+		}
+
+		//shorthand for custom elements
+		if (isObjectLiteral(tag)) {
+			var key = Object.keys(tag)[0];
+			var value = tag[key];
+			if (exports.hasOwnProperty(key)) {
+				var func = exports[key](value);
+				func(this.getCurrentElem(), props);
+			}
 			return this.selfFunc;
 		}
 
