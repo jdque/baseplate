@@ -180,6 +180,25 @@ var Htmler = (function () {
 		}
 	}
 
+	function Updater() {
+		this.targets = [];
+	}
+
+	Updater.prototype.addTarget = function (element, buildFunc) {
+		this.targets.push({
+			buildFunc: buildFunc,
+			element: element
+		});
+	}
+
+	Updater.prototype.update = function () {
+		this.targets.forEach(function (target) {
+			var newElement = target.buildFunc();
+			target.element.parentNode.replaceChild(newElement, target.element);
+			target.element = newElement;
+		})
+	}
+
 	var isObserving = false;
 	var stores = [];
 
@@ -798,6 +817,21 @@ var Htmler = (function () {
 		};
 	}
 
+	function bp_dynamic(buildFunc) {
+		buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
+		return function (parent, attrs) {
+			var element = buildFunc();
+			parent.appendChild(element);
+			if (attrs['updater'] instanceof Updater) {
+				attrs['updater'].addTarget(element, buildFunc);
+			}
+		}
+	}
+
+	function bp_make_updater() {
+		return new Updater();
+	}
+
 	function bp_make_store(obj) {
 		var newStore = null;
 		if (typeof obj === 'object') {
@@ -855,6 +889,8 @@ var Htmler = (function () {
 		defer: bp_defer,
 		text: bp_text,
 		repeat: bp_repeat,
+		dynamic: bp_dynamic,
+		make_updater: bp_make_updater,
 		make_store: bp_make_store,
 		obs: bp_obs,
 		match: bp_match
