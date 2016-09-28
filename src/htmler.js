@@ -817,6 +817,24 @@ var Htmler = (function () {
 		};
 	}
 
+	function bp_switch(stateMap) {
+		return function (parent, attrs) {
+			var currentElement = document.createComment('');
+			parent.appendChild(currentElement);
+
+			var to = function (key) {
+				var value = stateMap[key];
+				var element = typeof value === 'function' ? value(to) : value;
+				parent.replaceChild(element, currentElement);
+				currentElement = element;
+			}
+
+			if (attrs.hasOwnProperty('start')) {
+				to(attrs['start']);
+			}
+		}
+	}
+
 	function bp_dynamic(buildFunc) {
 		buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
 		return function (parent, attrs) {
@@ -889,6 +907,7 @@ var Htmler = (function () {
 		defer: bp_defer,
 		text: bp_text,
 		repeat: bp_repeat,
+		switch: bp_switch,
 		dynamic: bp_dynamic,
 		make_updater: bp_make_updater,
 		make_store: bp_make_store,
