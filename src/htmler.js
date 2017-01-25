@@ -783,10 +783,13 @@ var Htmler = (function () {
 			var placeholderElement = document.createComment('');
 			parent.appendChild(placeholderElement);
 
-			var doneFunc = function (element) {
-				parent.replaceChild(element, placeholderElement);
+			var doneFunc = function () {
+				parent.replaceChild(buildFunc.apply(null, arguments), placeholderElement);
 			};
-			buildFunc(doneFunc);
+
+			if (typeof attrs['until'] === 'function') {
+				attrs['until'](doneFunc);
+			}
 		}
 	}
 
