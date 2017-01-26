@@ -932,3 +932,5 @@ var Htmler = (function () {
 
 	return exports;
 })();
+
+module.exports = Htmler;

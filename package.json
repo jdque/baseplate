@@ -1,0 +1,20 @@
+{
+  "name": "htmler",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/htmler.js",
+  "directories": {
+    "example": "examples",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "systemjs": "0.20.0",
+    "systemjs-builder": "0.16.0"
+  },
+  "author": "",
+  "license": "ISC"
+}
