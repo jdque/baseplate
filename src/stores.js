@@ -1,8 +1,4 @@
 var Util = require('./util');
-var Watch = require('./watches').Watch;
-var ValueWatch = require('./watches').ValueWatch;
-var ArrayWatch = require('./watches').ArrayWatch;
-var ObjectWatch = require('./watches').ObjectWatch;
 
 function Store(watches) {
     this.locked = false;
@@ -27,42 +23,22 @@ Store.prototype.didChange = function () { /*implement me*/ }
 
 Store.prototype.sync = function () { /*implement me*/ }
 
-Store.prototype.obs = function (propName) {
-    var property = this[propName];
-    var propType = typeof property;
-    var watch = null;
+Store.prototype.addWatch = function (watch) {
+    var existingWatchIdx = -1;
+    //TODO prevent adding duplicate watches by removing watches bound to an element that is removed
+    /*for (var i = 0; i < this.watches.length; i++) {
+        if (this.watches[i].propName === propName) {
+            existingWatchIdx = i;
+            break;
+        }
+    }*/
 
-    if (typeof property === 'object') {
-        if (property instanceof ArrayStore) {
-            watch = new ArrayWatch(this, propName);
-        }
-        else {
-            watch = new ObjectWatch(this, propName);
-        }
+    if (existingWatchIdx >= 0) {
+        this.watches[existingWatchIdx] = watch;
     }
     else {
-        watch = new ValueWatch(this, propName);
+        this.watches.push(watch);
     }
-
-    if (watch) {
-        var existingWatchIdx = -1;
-        //TODO prevent adding duplicate watches by removing watches bound to an element that is removed
-        /*for (var i = 0; i < this.watches.length; i++) {
-            if (this.watches[i].propName === propName) {
-                existingWatchIdx = i;
-                break;
-            }
-        }*/
-
-        if (existingWatchIdx >= 0) {
-            this.watches[existingWatchIdx] = watch;
-        }
-        else {
-            this.watches.push(watch);
-        }
-    }
-
-    return watch;
 }
 
 Store.prototype.updateWatches = function (force) {

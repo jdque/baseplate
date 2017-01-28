@@ -40,10 +40,10 @@ Updater.prototype.update = function () {
     })
 }
 
-var isObserving = false;
-var stores = [];
+window.isObserving = false;
+window.stores = [];
 
-function updateStores() {
+window.updateStores = function () {
     for (var i = 0; i < stores.length; i++) {
         stores[i].updateWatches();
     }
@@ -179,10 +179,31 @@ function bp_make_store(obj) {
     return newStore;
 }
 
-function bp_obs(store, prop) {
-    if (store instanceof Store) {
-        return store.obs(prop);
+function bp_obs(store, propName) {
+    if (store instanceof Store === false) {
+        return null;
     }
+
+    var property = store[propName];
+    var propType = typeof property;
+    var watch = null;
+    if (typeof property === 'object') {
+        if (property instanceof ArrayStore) {
+            watch = new ArrayWatch(store, propName);
+        }
+        else {
+            watch = new ObjectWatch(store, propName);
+        }
+    }
+    else {
+        watch = new ValueWatch(store, propName);
+    }
+
+    if (watch) {
+        store.addWatch(watch);
+    }
+
+    return watch;
 }
 
 function bp_match(watch, usePatterns, defaultVal) {
