@@ -62,11 +62,12 @@ function bp_custom(arg) {
         var argValue = typeof arg === 'function' ? arg(parent) : arg;
         if (argValue instanceof ObjectWatch) {
             var watch = argValue;
-            if (watch.getValue() instanceof Element) {
-                var element = parent.appendChild(watch.getValue());
+            if (watch.getInitialValue() instanceof Element) {
+                var element = parent.appendChild(watch.getInitialValue());
                 watch.setContext(Watch.Context.ELEMENT);
                 watch.setTargetElement(element);
-                watch.update();
+                watch.setUpdater(onWatchUpdate);
+                watch.update(watch.getInitialValue());
             }
         }
         else if (argValue instanceof Element) {
@@ -96,12 +97,12 @@ function bp_text(arg) {
 
         if (argValue instanceof Watch) {
             var watch = argValue;
-            var text = watch.getValue();
-            var textNode = document.createTextNode(text);
+            var textNode = document.createTextNode("");
             var element = parent.appendChild(textNode);
             watch.setContext(Watch.Context.TEXT);
             watch.setTargetElement(element);
-            watch.update();
+            watch.setUpdater(onWatchUpdate);
+            watch.update(watch.getInitialValue());
         }
         else {
             var textNode = document.createTextNode(argValue);
@@ -119,7 +120,8 @@ function bp_repeat(buildFunc) {
             watch.setBuildFunc(buildFunc);
             watch.setContext(Watch.Context.REPEAT);
             watch.setTargetElement(parent.appendChild(document.createComment('')));
-            watch.update();
+            watch.setUpdater(onWatchUpdate);
+            watch.update(watch.getInitialValue());
         }
         else if (data instanceof Array || data instanceof ArrayStore) {
             for (var i = 0; i < data.length; i++) {
@@ -184,19 +186,18 @@ function bp_obs(store, propName) {
         return null;
     }
 
-    var property = store[propName];
-    var propType = typeof property;
+    var propValue = store[propName];
     var watch = null;
-    if (typeof property === 'object') {
-        if (property instanceof ArrayStore) {
-            watch = new ArrayWatch(store, propName);
+    if (typeof propValue === 'object') {
+        if (propValue instanceof ArrayStore) {
+            watch = new ArrayWatch(propName, propValue);
         }
         else {
-            watch = new ObjectWatch(store, propName);
+            watch = new ObjectWatch(propName, propValue);
         }
     }
     else {
-        watch = new ValueWatch(store, propName);
+        watch = new ValueWatch(propName, propValue);
     }
 
     if (watch) {
@@ -207,6 +208,7 @@ function bp_obs(store, propName) {
 }
 
 function bp_match(watch, usePatterns, defaultVal) {
+    //FIXME
     var newWatch = Watch.clone(watch);
     newWatch.sourceStore.watches.push(newWatch);
     newWatch.patternFunc = function (currentVal) {
@@ -232,6 +234,66 @@ function bp_match(watch, usePatterns, defaultVal) {
     }
 
     return newWatch;
+}
+
+function onWatchUpdate(watch, setVal) {
+    if (watch instanceof ValueWatch) {
+        onValueWatchUpdate(watch, setVal);
+    }
+    else if (watch instanceof ArrayWatch) {
+        onArrayWatchUpdate(watch, setVal);
+    }
+    else if (watch instanceof ObjectWatch) {
+        onObjectWatchUpdate(watch, setVal);
+    }
+}
+
+function onValueWatchUpdate(watch, setVal) {
+    if (watch.context === Watch.Context.TEXT) {
+        watch.targetElement.nodeValue = setVal;
+    }
+}
+
+function onArrayWatchUpdate(watch, setVal) {
+    if (watch.context === Watch.Context.TEXT) {
+        watch.targetElement.nodeValue = setVal;
+    }
+    else if (watch.context === Watch.Context.REPEAT) {
+        var parent = watch.targetElement.parentNode;
+        var oldArrayIds = setVal.oldArrayIds || [];
+        for (var i = 0; i < oldArrayIds.length; i++) {
+            if (watch.targetElement.nextSibling) {
+                parent.removeChild(watch.targetElement.nextSibling);
+            }
+        }
+
+        if (setVal instanceof ArrayStore) {
+            for (var i = setVal.length - 1; i >= 0; i--) {
+                if (watch.targetElement.nextSibling) {
+                    parent.insertBefore(watch.buildFunc(setVal.subStores[i], i), watch.targetElement.nextSibling);
+                }
+                else {
+                    parent.appendChild(watch.buildFunc(setVal.subStores[i], i));
+                }
+            }
+        }
+    }
+}
+
+function onObjectWatchUpdate(watch, setVal) {
+    if (watch.context === Watch.Context.TEXT) {
+        watch.targetElement.nodeValue = setVal;
+    }
+    else if (watch.context === Watch.Context.ELEMENT) {
+        if (setVal instanceof Element) {
+            watch.targetElement.parentNode.replaceChild(setVal, watch.targetElement);
+            watch.targetElement = setVal;
+        }
+        else {
+            watch.targetElement.parentNode.removeChild(watch.targetElement);
+            watch.targetElement = null;
+        }
+    }
 }
 
 var Htmler = {

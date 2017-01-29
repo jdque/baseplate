@@ -1,4 +1,7 @@
 var Util = require('./util');
+var Store = require('./stores').Store;
+var ArrayStore = require('./stores').ArrayStore;
+var ObjectStore = require('./stores').ObjectStore;
 var Watch = require('./watches').Watch;
 var ValueWatch = require('./watches').ValueWatch;
 var ArrayWatch = require('./watches').ArrayWatch;
@@ -109,8 +112,9 @@ HtmlBuilder.applyProps = function (elem, propsObj) {
 			if (value instanceof Watch) {
 				value.setContext(Watch.Context.ELEMENT_PROPERTY);
 				value.setTargetElement(elem);
+				value.setUpdater(onWatchUpdate);
 				value.targetPropName = name;
-				value.update();
+				value.update(value.getInitialValue());
 			}
 			else {
 				elem[name] = value;
@@ -128,8 +132,9 @@ HtmlBuilder.applyAttrs = function (elem, attrsObj) {
 			if (value instanceof Watch) {
 				value.setContext(Watch.Context.ELEMENT_ATTRIBUTE);
 				value.setTargetElement(elem);
+				value.setUpdater(onWatchUpdate);
 				value.targetAttrName = name;
-				value.update();
+				value.update(value.getInitialValue());
 			}
 			else {
 				if (Util.isFalsey(value)) {
@@ -144,7 +149,8 @@ HtmlBuilder.applyAttrs = function (elem, attrsObj) {
 	else if (attrsObj instanceof ObjectWatch) {
 		attrsObj.setContext(Watch.Context.ELEMENT_ATTRIBUTE_OBJECT);
 		attrsObj.setTargetElement(elem);
-		attrsObj.update();
+		attrsObj.setUpdater(onWatchUpdate);
+		attrsObj.update(attrsObj.getInitialValue());
 	}
 }
 
@@ -152,7 +158,8 @@ HtmlBuilder.applyClasses = function (elem, classArray) {
 	if (classArray instanceof ArrayWatch) {
 		classArray.setContext(Watch.Context.ELEMENT_CLASS_LIST);
 		classArray.setTargetElement(elem);
-		classArray.update();
+		classArray.setUpdater(onWatchUpdate);
+		classArray.update(classArray.getInitialValue());
 	}
 	else {
 		elem.classList.add.apply(elem.classList, classArray);
@@ -168,8 +175,9 @@ HtmlBuilder.applyStyles = function (elem, stylesObj) {
 			if (value instanceof ValueWatch) {
 				value.setContext(Watch.Context.ELEMENT_STYLE_PROPERTY);
 				value.setTargetElement(elem);
+				value.setUpdater(onWatchUpdate);
 				value.targetStylePropName = name;
-				value.update();
+				value.update(value.getInitialValue());
 			}
 			else {
 				elem.style[name] = value;
@@ -179,8 +187,70 @@ HtmlBuilder.applyStyles = function (elem, stylesObj) {
 	else if (stylesObj instanceof ObjectWatch) {
 		stylesObj.setContext(Watch.Context.ELEMENT_STYLE_OBJECT);
 		stylesObj.setTargetElement(elem);
-		stylesObj.update();
+		stylesObj.setUpdater(onWatchUpdate);
+		stylesObj.update(stylesObj.getInitialValue());
 	}
+}
+
+function onWatchUpdate(watch, setVal) {
+	if (watch instanceof ValueWatch) {
+		onValueWatchUpdate(watch, setVal);
+	}
+	else if (watch instanceof ArrayWatch) {
+		onArrayWatchUpdate(watch, setVal);
+	}
+	else if (watch instanceof ObjectWatch) {
+		onObjectWatchUpdate(watch, setVal);
+	}
+}
+
+function onValueWatchUpdate(watch, setVal) {
+	if (watch.context === Watch.Context.ELEMENT_ATTRIBUTE) {
+        if (Util.isFalsey(setVal))
+            watch.targetElement.removeAttribute(watch.targetAttrName);
+        else
+            watch.targetElement.setAttribute(watch.targetAttrName, setVal);
+    }
+    else if (watch.context === Watch.Context.ELEMENT_PROPERTY) {
+        watch.targetElement[watch.targetPropName] = setVal;
+    }
+    else if (watch.context === Watch.Context.ELEMENT_STYLE_PROPERTY) {
+        watch.targetElement.style[watch.targetStylePropName] = setVal;
+    }
+}
+
+function onArrayWatchUpdate(watch, setVal) {
+	if (watch.context === Watch.Context.ELEMENT_ATTRIBUTE) {
+        if (Util.isFalsey(setVal))
+            watch.targetElement.removeAttribute(watch.targetAttrName);
+        else
+            watch.targetElement.setAttribute(watch.targetAttrName, setVal);
+    }
+    else if (watch.context === Watch.Context.ELEMENT_PROPERTY) {
+        watch.targetElement[watch.targetPropName] = setVal;
+    }
+    else if (watch.context === Watch.Context.ELEMENT_STYLE_PROPERTY) {
+        watch.targetElement.style[watch.targetStylePropName] = setVal;
+    }
+    else if (watch.context === Watch.Context.ELEMENT_CLASS_LIST) {
+        if (setVal instanceof ArrayStore) {
+            watch.targetElement.className = "";
+            HtmlBuilder.applyClasses(watch.targetElement, setVal.array);
+        }
+    }
+}
+
+function onObjectWatchUpdate(watch, setVal) {
+	if (watch.context === Watch.Context.ELEMENT_STYLE_OBJECT) {
+        if (setVal instanceof ObjectStore) {
+            HtmlBuilder.applyStyles(watch.targetElement, setVal.obj);
+        }
+    }
+    else if (watch.context === Watch.Context.ELEMENT_ATTRIBUTE_OBJECT) {
+        if (setVal instanceof ObjectStore) {
+            HtmlBuilder.applyAttrs(watch.targetElement, setVal.obj);
+        }
+    }
 }
 
 module.exports = HtmlBuilder;

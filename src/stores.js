@@ -4,7 +4,6 @@ function Store(watches) {
     this.locked = false;
     this.subStores = {};
     this.watches = watches || [];
-    this.watches.forEach(function (watch) { watch.sourceStore = this;}, this);
 }
 
 Store.prototype.lock = function () {
@@ -42,9 +41,12 @@ Store.prototype.addWatch = function (watch) {
 }
 
 Store.prototype.updateWatches = function (force) {
+    this.lock();
+
     if (this.didChange() || force) {
         for (var i = 0; i < this.watches.length; i++) {
-            this.watches[i].update();
+            var withValue = this[this.watches[i].getPropName()];
+            this.watches[i].update(withValue);
         }
         this.sync();
     }
@@ -52,6 +54,8 @@ Store.prototype.updateWatches = function (force) {
     for (var key in this.subStores) {
         this.subStores[key].updateWatches(force);
     }
+
+    this.unlock();
 }
 
 function ArrayStore(array, watches) {
@@ -116,7 +120,7 @@ ArrayStore.prototype.bindItem = function (idx) {
                     this.array[idx] = val;
                 }
 
-                updateStores();
+                window.updateStores();
             },
             get: function () {
                 return this.subStores[idx] || this.array[idx];
@@ -134,7 +138,7 @@ ArrayStore.prototype.overrideArrayMethods = function () {
         self[func] = function () {
             Array.prototype[func].apply(self.array, arguments);
             self.updateItems();
-            updateStores();
+            window.updateStores();
         };
     });
 
@@ -143,7 +147,7 @@ ArrayStore.prototype.overrideArrayMethods = function () {
     iterators.forEach(function (func) {
         self[func] = function () {
             var result = Array.prototype[func].apply(self.array, arguments);
-            updateStores();
+            window.updateStores();
             return result;
         };
     });
@@ -251,7 +255,7 @@ ObjectStore.prototype.bindProp = function (key) {
                     this.obj[key] = val;
                 }
 
-                updateStores();
+                window.updateStores();
             },
             get: function () {
                 return this.subStores[key] || this.obj[key];

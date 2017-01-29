@@ -1,16 +1,10 @@
-var Util = require('./util');
-var Store = require('./stores').Store;
-var ArrayStore = require('./stores').ArrayStore;
-var ObjectStore = require('./stores').ObjectStore;
-var HtmlBuilder = require('./builder');
-
-function Watch(sourceStore, propName) {
-    this.sourceStore = sourceStore;
+function Watch(propName, initialValue) {
     this.propName = propName;
+    this.initialValue = initialValue;
+    this.updateFunc = function (watch, setVal) {};
     this.context = null;
     this.targetElement = null;
     this.changeFunc = null;
-
     this.patternFunc = null;
     this.patterns = [];
 }
@@ -29,9 +23,9 @@ Watch.Context = {
 
 Watch.clone = function (watch) {
     var newWatch;
-    if (watch instanceof ValueWatch) newWatch = new ValueWatch(watch.sourceStore, watch.propName);
-    else if (watch instanceof ArrayWatch) newWatch = new ArrayWatch(watch.sourceStore, watch.propName);
-    else if (watch instanceof Objectwatch) newWatch = new Objectwatch(watch.sourceStore, watch.propName);
+    if (watch instanceof ValueWatch) newWatch = new ValueWatch(watch.propName, watch.initialValue);
+    else if (watch instanceof ArrayWatch) newWatch = new ArrayWatch(watch.propName, watch.initialValue);
+    else if (watch instanceof Objectwatch) newWatch = new Objectwatch(watch.propName, watch.initialValue);
     newWatch.context = watch.context;
     newWatch.targetElement = watch.targetElement;
     newWatch.changeFunc = watch.changeFunc;
@@ -65,52 +59,41 @@ Watch.prototype.setTargetElement = function (element) {
     this.targetElement = element;
 }
 
-Watch.prototype.getValue = function () {
-    return this.sourceStore[this.propName];
+Watch.prototype.setUpdater = function (func) {
+    this.updateFunc = func;
 }
 
-Watch.prototype.update = function () { /*implement me*/ }
+Watch.prototype.getPropName = function () {
+    return this.propName;
+}
 
-function ValueWatch(store, propName) {
-    Watch.apply(this, [store, propName]);
+Watch.prototype.getInitialValue = function () {
+    return this.initialValue;
+}
+
+Watch.prototype.update = function (currentVal) { /*implement me*/ }
+
+function ValueWatch(propName, initialValue) {
+    Watch.apply(this, [propName, initialValue]);
 }
 
 ValueWatch.prototype = Object.create(Watch.prototype);
 
-ValueWatch.prototype.update = function () {
-    var currentVal = this.getValue();
+ValueWatch.prototype.update = function (currentVal) {
     var oldVal = currentVal; //TODO
     var setVal = currentVal;
     if (this.changeFunc) {
-        this.sourceStore.lock();
         setVal = this.changeFunc(currentVal, oldVal, this.targetElement);
-        this.sourceStore.unlock();
     }
     if (this.patternFunc) {
-        this.sourceStore.lock();
         setVal = this.patternFunc(setVal);
-        this.sourceStore.unlock();
     }
 
-    if (this.context === Watch.Context.TEXT) {
-        this.targetElement.nodeValue = setVal;
-    }
-    else if (this.context === Watch.Context.ELEMENT_ATTRIBUTE) {
-        if (Util.isFalsey(setVal))
-            this.targetElement.removeAttribute(this.targetAttrName);
-        else
-            this.targetElement.setAttribute(this.targetAttrName, setVal);
-    }
-    else if (this.context === Watch.Context.ELEMENT_PROPERTY) {
-        this.targetElement[this.targetPropName] = setVal;
-    }
-    else if (this.context === Watch.Context.ELEMENT_STYLE_PROPERTY) {
-        this.targetElement.style[this.targetStylePropName] = setVal;
-    }
+    this.updateFunc(this, setVal);
 }
 
-function ArrayWatch(store, propName) {
-    Watch.apply(this, [store, propName]);
+function ArrayWatch(propName, initialValue) {
+    Watch.apply(this, [propName, initialValue]);
 
     this.buildFunc = null;
 }
@@ -121,107 +104,36 @@ ArrayWatch.prototype.setBuildFunc = function (buildFunc) {
     this.buildFunc = buildFunc;
 }
 
-ArrayWatch.prototype.update = function () {
-    var currentArray = this.getValue();
+ArrayWatch.prototype.update = function (currentArray) {
     var oldArrayIds = currentArray.oldArrayIds || [];
     var setVal = currentArray;
     if (this.changeFunc) {
-        this.sourceStore.lock();
         setVal = this.changeFunc(currentArray, currentArray /*TODO*/, this.targetElement);
-        this.sourceStore.unlock();
     }
     if (this.patternFunc) {
-        this.sourceStore.lock();
         setVal = this.patternFunc(setVal);
-        this.sourceStore.unlock();
     }
 
-    if (this.context === Watch.Context.TEXT) {
-        this.targetElement.nodeValue = setVal;
-    }
-    else if (this.context === Watch.Context.REPEAT) {
-        var parent = this.targetElement.parentNode;
-        for (var i = 0; i < oldArrayIds.length; i++) {
-            if (this.targetElement.nextSibling) {
-                parent.removeChild(this.targetElement.nextSibling);
-            }
-        }
-
-        if (setVal instanceof ArrayStore) {
-            for (var i = setVal.length - 1; i >= 0; i--) {
-                if (this.targetElement.nextSibling) {
-                    parent.insertBefore(this.buildFunc(setVal.subStores[i], i), this.targetElement.nextSibling);
-                }
-                else {
-                    parent.appendChild(this.buildFunc(setVal.subStores[i], i));
-                }
-            }
-        }
-    }
-    else if (this.context === Watch.Context.ELEMENT_ATTRIBUTE) {
-        if (Util.isFalsey(setVal))
-            this.targetElement.removeAttribute(this.targetAttrName);
-        else
-            this.targetElement.setAttribute(this.targetAttrName, setVal);
-    }
-    else if (this.context === Watch.Context.ELEMENT_PROPERTY) {
-        this.targetElement[this.targetPropName] = setVal;
-    }
-    else if (this.context === Watch.Context.ELEMENT_STYLE_PROPERTY) {
-        this.targetElement.style[this.targetStylePropName] = setVal;
-    }
-    else if (this.context === Watch.Context.ELEMENT_CLASS_LIST) {
-        if (setVal instanceof ArrayStore) {
-            this.targetElement.className = "";
-            HtmlBuilder.applyClasses(this.targetElement, setVal.array);
-        }
-    }
+    this.updateFunc(this, setVal);
 }
 
-function ObjectWatch(store, propName) {
-    Watch.apply(this, [store, propName]);
+function ObjectWatch(propName, initialValue) {
+    Watch.apply(this, [propName, initialValue]);
 }
 
 ObjectWatch.prototype = Object.create(Watch.prototype);
 
-ObjectWatch.prototype.update = function () {
-    var currentObj = this.getValue();
+ObjectWatch.prototype.update = function (currentObj) {
     var oldObj = currentObj; //TODO
     var setVal = currentObj;
     if (this.changeFunc) {
-        this.sourceStore.lock();
         setVal = this.changeFunc(currentObj, oldObj, this.targetElement);
-        this.sourceStore.unlock();
     }
     if (this.patternFunc) {
-        this.sourceStore.lock();
         setVal = this.patternFunc(setVal);
-        this.sourceStore.unlock();
     }
 
-    if (this.context === Watch.Context.TEXT) {
-        this.targetElement.nodeValue = setVal;
-    }
-    else if (this.context === Watch.Context.ELEMENT) {
-        if (setVal instanceof Element) {
-            this.targetElement.parentNode.replaceChild(setVal, this.targetElement);
-            this.targetElement = setVal;
-        }
-        else {
-            this.targetElement.parentNode.removeChild(this.targetElement);
-            this.targetElement = null;
-        }
-    }
-    else if (this.context === Watch.Context.ELEMENT_STYLE_OBJECT) {
-        if (setVal instanceof ObjectStore) {
-            HtmlBuilder.applyStyles(this.targetElement, setVal.obj);
-        }
-    }
-    else if (this.context === Watch.Context.ELEMENT_ATTRIBUTE_OBJECT) {
-        if (setVal instanceof ObjectStore) {
-            HtmlBuilder.applyAttrs(this.targetElement, setVal.obj);
-        }
-    }
+    this.updateFunc(this, setVal);
 }
 
 module.exports = {
