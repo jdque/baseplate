@@ -58,7 +58,7 @@ function bp_html() {
 }
 
 function bp_custom(arg) {
-    return function (parent, attrs) {
+    return function (parent, props) {
         var argValue = typeof arg === 'function' ? arg(parent) : arg;
         if (argValue instanceof ObjectWatch) {
             var watch = argValue;
@@ -77,7 +77,7 @@ function bp_custom(arg) {
 }
 
 function bp_defer(buildFunc) {
-    return function (parent, attrs) {
+    return function (parent, props) {
         var placeholderElement = document.createComment('');
         parent.appendChild(placeholderElement);
 
@@ -85,54 +85,26 @@ function bp_defer(buildFunc) {
             parent.replaceChild(buildFunc.apply(null, arguments), placeholderElement);
         };
 
-        if (typeof attrs['until'] === 'function') {
-            attrs['until'](doneFunc);
+        if (typeof props['until'] === 'function') {
+            props['until'](doneFunc);
         }
     }
 }
 
-function bp_text(arg) {
-    return function (parent, attrs) {
-        var argValue = typeof arg === 'function' ? arg(parent) : arg;
-
-        if (argValue instanceof Watch) {
-            var watch = argValue;
-            var textNode = document.createTextNode("");
-            var element = parent.appendChild(textNode);
-            watch.setContext(Watch.Context.TEXT);
-            watch.setTargetElement(element);
-            watch.setUpdater(onWatchUpdate);
-            watch.update(watch.getInitialValue());
-        }
-        else {
-            var textNode = document.createTextNode(argValue);
-            parent.appendChild(textNode);
-        }
+function bp_text(text) {
+    return function (parent, props) {
+        HtmlBuilder.makeText(parent, props, text);
     }
 }
 
 function bp_repeat(buildFunc) {
-    buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
-    return function (parent, attrs) {
-        var data = typeof attrs.data === 'function' ? attrs.data(parent) : attrs.data;
-        if (data instanceof ArrayWatch) {
-            var watch = data;
-            watch.setBuildFunc(buildFunc);
-            watch.setContext(Watch.Context.REPEAT);
-            watch.setTargetElement(parent.appendChild(document.createComment('')));
-            watch.setUpdater(onWatchUpdate);
-            watch.update(watch.getInitialValue());
-        }
-        else if (data instanceof Array || data instanceof ArrayStore) {
-            for (var i = 0; i < data.length; i++) {
-                parent.appendChild(buildFunc(data[i], i));
-            }
-        }
+    return function (parent, props) {
+        HtmlBuilder.makeRepeat(parent, props, buildFunc);
     };
 }
 
 function bp_switch(stateMap) {
-    return function (parent, attrs) {
+    return function (parent, props) {
         var currentElement = document.createComment('');
         parent.appendChild(currentElement);
 
@@ -143,19 +115,19 @@ function bp_switch(stateMap) {
             currentElement = element;
         }
 
-        if (attrs.hasOwnProperty('start')) {
-            to(attrs['start']);
+        if (props.hasOwnProperty('start')) {
+            to(props['start']);
         }
     }
 }
 
 function bp_dynamic(buildFunc) {
     buildFunc = typeof buildFunc === 'function' ? buildFunc : function () {};
-    return function (parent, attrs) {
+    return function (parent, props) {
         var element = buildFunc();
         parent.appendChild(element);
-        if (attrs['updater'] instanceof Updater) {
-            attrs['updater'].addTarget(element, buildFunc);
+        if (props['updater'] instanceof Updater) {
+            props['updater'].addTarget(element, buildFunc);
         }
     }
 }
@@ -236,63 +208,24 @@ function bp_match(watch, usePatterns, defaultVal) {
 }
 
 function onWatchUpdate(watch, setVal) {
-    if (setVal instanceof ValueStore) {
-        onValueWatchUpdate(watch, setVal);
-    }
-    else if (setVal instanceof ArrayStore) {
+    if (setVal instanceof ArrayStore) {
         onArrayWatchUpdate(watch, setVal);
     }
     else if (setVal instanceof ObjectStore) {
         onObjectWatchUpdate(watch, setVal);
     }
+    else {
+        onValueWatchUpdate(watch, setVal);
+    }
 }
 
 function onValueWatchUpdate(watch, setVal) {
-    if (watch.context === Watch.Context.TEXT) {
-        watch.targetElement.nodeValue = setVal;
-    }
 }
 
 function onArrayWatchUpdate(watch, setVal) {
-    if (watch.context === Watch.Context.TEXT) {
-        watch.targetElement.nodeValue = setVal;
-    }
-    else if (watch.context === Watch.Context.REPEAT) {
-        var parent = watch.targetElement.parentNode;
-        var oldArrayIds = setVal.oldArrayIds || [];
-        for (var i = 0; i < oldArrayIds.length; i++) {
-            if (watch.targetElement.nextSibling) {
-                parent.removeChild(watch.targetElement.nextSibling);
-            }
-        }
-
-        if (setVal instanceof ArrayStore) {
-            for (var i = setVal.length - 1; i >= 0; i--) {
-                if (watch.targetElement.nextSibling) {
-                    parent.insertBefore(watch.buildFunc(setVal.subStores[i], i), watch.targetElement.nextSibling);
-                }
-                else {
-                    parent.appendChild(watch.buildFunc(setVal.subStores[i], i));
-                }
-            }
-        }
-    }
 }
 
 function onObjectWatchUpdate(watch, setVal) {
-    if (watch.context === Watch.Context.TEXT) {
-        watch.targetElement.nodeValue = setVal;
-    }
-    else if (watch.context === Watch.Context.ELEMENT) {
-        if (setVal instanceof Element) {
-            watch.targetElement.parentNode.replaceChild(setVal, watch.targetElement);
-            watch.targetElement = setVal;
-        }
-        else {
-            watch.targetElement.parentNode.removeChild(watch.targetElement);
-            watch.targetElement = null;
-        }
-    }
 }
 
 var Htmler = {

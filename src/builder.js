@@ -31,8 +31,7 @@ function HtmlBuilder(tag, props) {
 	//shorthand for text element
 	if (tag instanceof Array) {
 		tag.forEach(function (text) {
-			var textFunc = bp.text(text);
-			textFunc(this.getCurrentElem(), props);
+			HtmlBuilder.makeText(this.getCurrentElem(), props, text)
 		}, this);
 		return this.selfFunc;
 	}
@@ -192,20 +191,58 @@ HtmlBuilder.applyStyles = function (elem, stylesObj) {
 	}
 }
 
+HtmlBuilder.makeRepeat = function (parent, props, buildFunc) {
+	var buildFuncVal = typeof buildFunc === 'function' ? buildFunc : function () {};
+	var data = typeof props.data === 'function' ? props.data(parent) : props.data;
+    if (data instanceof ArrayWatch) {
+        var watch = data;
+        watch.setBuildFunc(buildFuncVal);
+        watch.setContext(Watch.Context.REPEAT);
+        watch.setTargetElement(parent.appendChild(document.createComment('')));
+        watch.setUpdater(onWatchUpdate);
+        watch.update(watch.getInitialValue());
+    }
+    else if (data instanceof Array || data instanceof ArrayStore) {
+        for (var i = 0; i < data.length; i++) {
+            parent.appendChild(buildFuncVal(data[i], i));
+        }
+    }
+}
+
+HtmlBuilder.makeText = function (parent, props, text) {
+	var textVal = typeof text === 'function' ? text(parent) : text;
+	if (textVal instanceof Watch) {
+        var watch = textVal;
+        var textNode = document.createTextNode("");
+        var element = parent.appendChild(textNode);
+        watch.setContext(Watch.Context.TEXT);
+        watch.setTargetElement(element);
+        watch.setUpdater(onWatchUpdate);
+        watch.update(watch.getInitialValue());
+    }
+    else {
+        var textNode = document.createTextNode(textVal);
+        parent.appendChild(textNode);
+    }
+}
+
 function onWatchUpdate(watch, setVal) {
-	if (setVal instanceof ValueStore) {
-	    onValueWatchUpdate(watch, setVal);
-	}
-	else if (setVal instanceof ArrayStore) {
+	if (setVal instanceof ArrayStore) {
 	    onArrayWatchUpdate(watch, setVal);
 	}
 	else if (setVal instanceof ObjectStore) {
 	    onObjectWatchUpdate(watch, setVal);
 	}
+	else {
+	    onValueWatchUpdate(watch, setVal);
+	}
 }
 
 function onValueWatchUpdate(watch, setVal) {
-	if (watch.context === Watch.Context.ELEMENT_ATTRIBUTE) {
+	if (watch.context === Watch.Context.TEXT) {
+        watch.targetElement.nodeValue = setVal;
+    }
+	else if (watch.context === Watch.Context.ELEMENT_ATTRIBUTE) {
         if (Util.isFalsey(setVal))
             watch.targetElement.removeAttribute(watch.targetAttrName);
         else
@@ -220,7 +257,30 @@ function onValueWatchUpdate(watch, setVal) {
 }
 
 function onArrayWatchUpdate(watch, setVal) {
-	if (watch.context === Watch.Context.ELEMENT_ATTRIBUTE) {
+	if (watch.context === Watch.Context.TEXT) {
+        watch.targetElement.nodeValue = setVal;
+    }
+    else if (watch.context === Watch.Context.REPEAT) {
+        var parent = watch.targetElement.parentNode;
+        var oldArrayIds = setVal.oldArrayIds || [];
+        for (var i = 0; i < oldArrayIds.length; i++) {
+            if (watch.targetElement.nextSibling) {
+                parent.removeChild(watch.targetElement.nextSibling);
+            }
+        }
+
+        if (setVal instanceof ArrayStore) {
+            for (var i = setVal.length - 1; i >= 0; i--) {
+                if (watch.targetElement.nextSibling) {
+                    parent.insertBefore(watch.buildFunc(setVal.subStores[i], i), watch.targetElement.nextSibling);
+                }
+                else {
+                    parent.appendChild(watch.buildFunc(setVal.subStores[i], i));
+                }
+            }
+        }
+    }
+	else if (watch.context === Watch.Context.ELEMENT_ATTRIBUTE) {
         if (Util.isFalsey(setVal))
             watch.targetElement.removeAttribute(watch.targetAttrName);
         else
@@ -241,7 +301,20 @@ function onArrayWatchUpdate(watch, setVal) {
 }
 
 function onObjectWatchUpdate(watch, setVal) {
-	if (watch.context === Watch.Context.ELEMENT_STYLE_OBJECT) {
+	if (watch.context === Watch.Context.TEXT) {
+        watch.targetElement.nodeValue = setVal;
+    }
+    else if (watch.context === Watch.Context.ELEMENT) {
+        if (setVal instanceof Element) {
+            watch.targetElement.parentNode.replaceChild(setVal, watch.targetElement);
+            watch.targetElement = setVal;
+        }
+        else {
+            watch.targetElement.parentNode.removeChild(watch.targetElement);
+            watch.targetElement = null;
+        }
+    }
+	else if (watch.context === Watch.Context.ELEMENT_STYLE_OBJECT) {
         if (setVal instanceof ObjectStore) {
             HtmlBuilder.applyStyles(watch.targetElement, setVal.obj);
         }
