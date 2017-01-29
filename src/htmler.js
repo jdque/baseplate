@@ -208,13 +208,11 @@ function bp_obs(store, propName) {
 }
 
 function bp_match(watch, usePatterns, defaultVal) {
-    //FIXME
-    var newWatch = Watch.clone(watch);
-    newWatch.sourceStore.watches.push(newWatch);
+    var newWatch = new ValueWatch(watch.getPropName(), watch.getInitialValue()); //FIXME
     newWatch.patternFunc = function (currentVal) {
         var computedVal = undefined;
-        for (var i = 0; i < newWatch.patterns.length; i++) {
-            var pattern = newWatch.patterns[i];
+        for (var i = 0; i < watch.patterns.length; i++) {
+            var pattern = watch.patterns[i];
             for (var j = 0, keys = Object.keys(pattern); j < keys.length; j++) {
                 var name = keys[j];
                 if (usePatterns.hasOwnProperty(name)) {
@@ -232,18 +230,19 @@ function bp_match(watch, usePatterns, defaultVal) {
         }
         return computedVal !== undefined ? computedVal : defaultVal;
     }
+    watch.matchers.push(newWatch);
 
     return newWatch;
 }
 
 function onWatchUpdate(watch, setVal) {
-    if (watch instanceof ValueWatch) {
+    if (setVal instanceof ValueStore) {
         onValueWatchUpdate(watch, setVal);
     }
-    else if (watch instanceof ArrayWatch) {
+    else if (setVal instanceof ArrayStore) {
         onArrayWatchUpdate(watch, setVal);
     }
-    else if (watch instanceof ObjectWatch) {
+    else if (setVal instanceof ObjectStore) {
         onObjectWatchUpdate(watch, setVal);
     }
 }

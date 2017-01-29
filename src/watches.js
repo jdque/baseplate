@@ -5,8 +5,10 @@ function Watch(propName, initialValue) {
     this.context = null;
     this.targetElement = null;
     this.changeFunc = null;
+
     this.patternFunc = null;
     this.patterns = [];
+    this.matchers = [];
 }
 
 Watch.Context = {
@@ -85,8 +87,11 @@ ValueWatch.prototype.update = function (currentVal) {
     if (this.changeFunc) {
         setVal = this.changeFunc(currentVal, oldVal, this.targetElement);
     }
-    if (this.patternFunc) {
-        setVal = this.patternFunc(setVal);
+    if (this.patterns) {
+        for (var i = 0; i < this.matchers.length; i++) {
+            var matcherVal = this.matchers[i].patternFunc(setVal);
+            this.matchers[i].update(matcherVal);
+        }
     }
 
     this.updateFunc(this, setVal);
@@ -110,8 +115,11 @@ ArrayWatch.prototype.update = function (currentArray) {
     if (this.changeFunc) {
         setVal = this.changeFunc(currentArray, currentArray /*TODO*/, this.targetElement);
     }
-    if (this.patternFunc) {
-        setVal = this.patternFunc(setVal);
+    if (this.patterns) {
+        for (var i = 0; i < this.matchers.length; i++) {
+            var matcherVal = this.matchers[i].patternFunc(setVal);
+            this.matchers[i].update(matcherVal);
+        }
     }
 
     this.updateFunc(this, setVal);
@@ -129,8 +137,11 @@ ObjectWatch.prototype.update = function (currentObj) {
     if (this.changeFunc) {
         setVal = this.changeFunc(currentObj, oldObj, this.targetElement);
     }
-    if (this.patternFunc) {
-        setVal = this.patternFunc(setVal);
+    if (this.patterns) {
+        for (var i = 0; i < this.matchers.length; i++) {
+            var matcherVal = this.matchers[i].patternFunc(setVal);
+            this.matchers[i].update(matcherVal);
+        }
     }
 
     this.updateFunc(this, setVal);

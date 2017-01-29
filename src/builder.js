@@ -31,7 +31,7 @@ function HtmlBuilder(tag, props) {
 	//shorthand for text element
 	if (tag instanceof Array) {
 		tag.forEach(function (text) {
-			var textFunc = bp_text(text);
+			var textFunc = bp.text(text);
 			textFunc(this.getCurrentElem(), props);
 		}, this);
 		return this.selfFunc;
@@ -193,14 +193,14 @@ HtmlBuilder.applyStyles = function (elem, stylesObj) {
 }
 
 function onWatchUpdate(watch, setVal) {
-	if (watch instanceof ValueWatch) {
-		onValueWatchUpdate(watch, setVal);
+	if (setVal instanceof ValueStore) {
+	    onValueWatchUpdate(watch, setVal);
 	}
-	else if (watch instanceof ArrayWatch) {
-		onArrayWatchUpdate(watch, setVal);
+	else if (setVal instanceof ArrayStore) {
+	    onArrayWatchUpdate(watch, setVal);
 	}
-	else if (watch instanceof ObjectWatch) {
-		onObjectWatchUpdate(watch, setVal);
+	else if (setVal instanceof ObjectStore) {
+	    onObjectWatchUpdate(watch, setVal);
 	}
 }
 
