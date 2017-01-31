@@ -64,9 +64,9 @@ function bp_custom(arg) {
             var watch = argValue;
             if (watch.getInitialValue() instanceof Element) {
                 var element = parent.appendChild(watch.getInitialValue());
-                watch.setContext(Watch.Context.ELEMENT);
-                watch.setTargetElement(element);
-                watch.setUpdater(onWatchUpdate);
+                watch.addReactor(function (setVal) {
+                    HtmlBuilder.applyElement(element, setVal);
+                });
                 watch.update(watch.getInitialValue());
             }
         }
@@ -205,27 +205,6 @@ function bp_match(watch, usePatterns, defaultVal) {
     watch.matchers.push(newWatch);
 
     return newWatch;
-}
-
-function onWatchUpdate(watch, setVal) {
-    if (setVal instanceof ArrayStore) {
-        onArrayWatchUpdate(watch, setVal);
-    }
-    else if (setVal instanceof ObjectStore) {
-        onObjectWatchUpdate(watch, setVal);
-    }
-    else {
-        onValueWatchUpdate(watch, setVal);
-    }
-}
-
-function onValueWatchUpdate(watch, setVal) {
-}
-
-function onArrayWatchUpdate(watch, setVal) {
-}
-
-function onObjectWatchUpdate(watch, setVal) {
 }
 
 var Htmler = {

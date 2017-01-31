@@ -93,10 +93,10 @@ HtmlBuilder.prototype.getCurrentElem = function () {
 }
 
 HtmlBuilder.applyProps = function (elem, propsObj) {
-    if (!propsObj) return;
+    if (!propsObj)
+        return;
 
-    for (var i = 0, keys = Object.keys(propsObj); i < keys.length; i++) {
-        var name = keys[i];
+    Object.keys(propsObj).forEach(function (name) {
         var value = propsObj[name];
         if (name === 'attributes' && typeof value === 'object') {
             HtmlBuilder.applyAttrs(elem, value);
@@ -109,220 +109,184 @@ HtmlBuilder.applyProps = function (elem, propsObj) {
         }
         else {
             if (value instanceof Watch) {
-                value.setContext(Watch.Context.ELEMENT_PROPERTY);
-                value.setTargetElement(elem);
-                value.setUpdater(onWatchUpdate);
-                value.targetPropName = name;
+                value.addReactor(function (setVal) {
+                    HtmlBuilder.applyElementProperty(elem, name, setVal);
+                });
                 value.update(value.getInitialValue());
             }
             else {
-                elem[name] = value;
+                HtmlBuilder.applyElementProperty(elem, name, value);
             }
         }
-    }
+    });
 }
 
 HtmlBuilder.applyAttrs = function (elem, attrsObj) {
     //TODO allow watch on object itself
     if (Util.isObjectLiteral(attrsObj)) {
-        for (var i = 0, keys = Object.keys(attrsObj); i < keys.length; i++) {
-            var name = keys[i];
+        Object.keys(attrsObj).forEach(function (name) {
             var value = attrsObj[name];
-            if (value instanceof Watch) {
-                value.setContext(Watch.Context.ELEMENT_ATTRIBUTE);
-                value.setTargetElement(elem);
-                value.setUpdater(onWatchUpdate);
-                value.targetAttrName = name;
+            if (value instanceof ValueWatch) {
+                value.addReactor(function (setVal) {
+                    HtmlBuilder.applyElementAttribute(elem, name, setVal);
+                });
                 value.update(value.getInitialValue());
             }
             else {
-                if (Util.isFalsey(value)) {
-                    elem.removeAttribute(name, value);
-                }
-                else {
-                    elem.setAttribute(name, value);
-                }
+                HtmlBuilder.applyElementAttribute(elem, name, value);
             }
-        }
+        });
     }
     else if (attrsObj instanceof ObjectWatch) {
-        attrsObj.setContext(Watch.Context.ELEMENT_ATTRIBUTE_OBJECT);
-        attrsObj.setTargetElement(elem);
-        attrsObj.setUpdater(onWatchUpdate);
+        attrsObj.addReactor(function (setVal) {
+            HtmlBuilder.applyElementAttributeObj(elem, setVal);
+        });
         attrsObj.update(attrsObj.getInitialValue());
     }
 }
 
 HtmlBuilder.applyClasses = function (elem, classArray) {
     if (classArray instanceof ArrayWatch) {
-        classArray.setContext(Watch.Context.ELEMENT_CLASS_LIST);
-        classArray.setTargetElement(elem);
-        classArray.setUpdater(onWatchUpdate);
+        classArray.addReactor(function (setVal) {
+            HtmlBuilder.applyElementClassList(elem, setVal);
+        });
         classArray.update(classArray.getInitialValue());
     }
     else {
-        elem.classList.add.apply(elem.classList, classArray);
+        HtmlBuilder.applyElementClassList(elem, classArray);
     }
 }
 
 HtmlBuilder.applyStyles = function (elem, stylesObj) {
     //TODO allow watch on object itself
     if (Util.isObjectLiteral(stylesObj)) {
-        for (var i = 0, keys = Object.keys(stylesObj); i < keys.length; i++) {
-            var name = keys[i];  //format can be either "foo-bar" or "fooBar"
+        Object.keys(stylesObj).forEach(function (name) {
             var value = stylesObj[name];
             if (value instanceof ValueWatch) {
-                value.setContext(Watch.Context.ELEMENT_STYLE_PROPERTY);
-                value.setTargetElement(elem);
-                value.setUpdater(onWatchUpdate);
-                value.targetStylePropName = name;
+                value.addReactor(function (setVal) {
+                    HtmlBuilder.applyElementStyle(elem, name, setVal);
+                });
                 value.update(value.getInitialValue());
             }
             else {
-                elem.style[name] = value;
+                HtmlBuilder.applyElementStyle(elem, name, value);
             }
-        }
+        });
     }
     else if (stylesObj instanceof ObjectWatch) {
-        stylesObj.setContext(Watch.Context.ELEMENT_STYLE_OBJECT);
-        stylesObj.setTargetElement(elem);
-        stylesObj.setUpdater(onWatchUpdate);
+        stylesObj.addReactor(function (setVal) {
+            HtmlBuilder.applyElementStyleObj(elem, setVal);
+        });
         stylesObj.update(stylesObj.getInitialValue());
     }
 }
 
+HtmlBuilder.applyRepeat = function (element, dataArray, buildFunc) {
+    if (dataArray instanceof ArrayStore) {
+        var parent = element.parentNode;
+        var oldArrayIds = dataArray.oldArrayIds || [];
+        for (var i = 0; i < oldArrayIds.length; i++) {
+            if (element.nextSibling) {
+                parent.removeChild(element.nextSibling);
+            }
+        }
+
+        for (var i = dataArray.length - 1; i >= 0; i--) {
+            if (element.nextSibling) {
+                parent.insertBefore(buildFunc(dataArray.subStores[i], i), element.nextSibling);
+            }
+            else {
+                parent.appendChild(buildFunc(dataArray.subStores[i], i));
+            }
+        }
+    }
+}
+
+HtmlBuilder.applyElement = function (element, newElement) {
+    if (newElement instanceof Element) {
+        element.parentNode.replaceChild(newElement, element);
+        element = newElement;
+    }
+    else {
+        element.parentNode.removeChild(element);
+        element = null;
+    }
+}
+
+HtmlBuilder.applyElementText = function (element, text) {
+    element.nodeValue = text;
+}
+
+HtmlBuilder.applyElementProperty = function (element, propName, propVal) {
+    element[propName] = propVal;
+}
+
+HtmlBuilder.applyElementAttribute = function (element, attrName, attrVal) {
+    if (Util.isFalsey(attrVal)) {
+        element.removeAttribute(attrName);
+    }
+    else {
+        element.setAttribute(attrName, attrVal);
+    }
+}
+
+HtmlBuilder.applyElementStyle = function (element, styleName, styleVal) {
+    element.style[styleName] = styleVal;
+}
+
+HtmlBuilder.applyElementStyleObj = function (element, styleObj) {
+    if (styleObj instanceof ObjectStore) {
+        HtmlBuilder.applyStyles(element, styleObj.obj);
+    }
+}
+
+HtmlBuilder.applyElementAttributeObj = function (element, attrObj) {
+    if (attrObj instanceof ObjectStore) {
+        HtmlBuilder.applyAttrs(element, attrObj.obj);
+    }
+}
+
+HtmlBuilder.applyElementClassList = function (element, classArray) {
+    element.className = "";
+    if (classArray instanceof ArrayStore) {
+        element.classList.add.apply(element.classList, classArray.array);
+    }
+    else {
+        element.classList.add.apply(element.classList, classArray);
+    }
+}
+
 HtmlBuilder.makeRepeat = function (parent, props, buildFunc) {
-    var buildFuncVal = typeof buildFunc === 'function' ? buildFunc : function () {};
-    var data = typeof props.data === 'function' ? props.data(parent) : props.data;
-    if (data instanceof ArrayWatch) {
-        var watch = data;
-        watch.setBuildFunc(buildFuncVal);
-        watch.setContext(Watch.Context.REPEAT);
-        watch.setTargetElement(parent.appendChild(document.createComment('')));
-        watch.setUpdater(onWatchUpdate);
+    var dataArray = typeof props.data === 'function' ? props.data(parent) : props.data;
+    if (dataArray instanceof ArrayWatch) {
+        var elem = parent.appendChild(document.createComment(''));
+
+        var watch = dataArray;
+        watch.addReactor(function (setVal) {
+            HtmlBuilder.applyRepeat(elem, setVal, buildFunc);
+        });
         watch.update(watch.getInitialValue());
     }
-    else if (data instanceof Array || data instanceof ArrayStore) {
-        for (var i = 0; i < data.length; i++) {
-            parent.appendChild(buildFuncVal(data[i], i));
+    else if (dataArray instanceof Array || dataArray instanceof ArrayStore) {
+        for (var i = 0; i < dataArray.length; i++) {
+            parent.appendChild(buildFunc(dataArray[i], i));
         }
     }
 }
 
 HtmlBuilder.makeText = function (parent, props, text) {
     var textVal = typeof text === 'function' ? text(parent) : text;
+    var textNode = document.createTextNode("");
+    var elem = parent.appendChild(textNode);
     if (textVal instanceof Watch) {
         var watch = textVal;
-        var textNode = document.createTextNode("");
-        var element = parent.appendChild(textNode);
-        watch.setContext(Watch.Context.TEXT);
-        watch.setTargetElement(element);
-        watch.setUpdater(onWatchUpdate);
+        watch.addReactor(function (setVal) {
+            HtmlBuilder.applyElementText(elem, setVal);
+        });
         watch.update(watch.getInitialValue());
     }
     else {
-        var textNode = document.createTextNode(textVal);
-        parent.appendChild(textNode);
-    }
-}
-
-function onWatchUpdate(watch, setVal) {
-    if (setVal instanceof ArrayStore) {
-        onArrayWatchUpdate(watch, setVal);
-    }
-    else if (setVal instanceof ObjectStore) {
-        onObjectWatchUpdate(watch, setVal);
-    }
-    else {
-        onValueWatchUpdate(watch, setVal);
-    }
-}
-
-function onValueWatchUpdate(watch, setVal) {
-    if (watch.context === Watch.Context.TEXT) {
-        watch.targetElement.nodeValue = setVal;
-    }
-    else if (watch.context === Watch.Context.ELEMENT_ATTRIBUTE) {
-        if (Util.isFalsey(setVal))
-            watch.targetElement.removeAttribute(watch.targetAttrName);
-        else
-            watch.targetElement.setAttribute(watch.targetAttrName, setVal);
-    }
-    else if (watch.context === Watch.Context.ELEMENT_PROPERTY) {
-        watch.targetElement[watch.targetPropName] = setVal;
-    }
-    else if (watch.context === Watch.Context.ELEMENT_STYLE_PROPERTY) {
-        watch.targetElement.style[watch.targetStylePropName] = setVal;
-    }
-}
-
-function onArrayWatchUpdate(watch, setVal) {
-    if (watch.context === Watch.Context.TEXT) {
-        watch.targetElement.nodeValue = setVal;
-    }
-    else if (watch.context === Watch.Context.REPEAT) {
-        var parent = watch.targetElement.parentNode;
-        var oldArrayIds = setVal.oldArrayIds || [];
-        for (var i = 0; i < oldArrayIds.length; i++) {
-            if (watch.targetElement.nextSibling) {
-                parent.removeChild(watch.targetElement.nextSibling);
-            }
-        }
-
-        if (setVal instanceof ArrayStore) {
-            for (var i = setVal.length - 1; i >= 0; i--) {
-                if (watch.targetElement.nextSibling) {
-                    parent.insertBefore(watch.buildFunc(setVal.subStores[i], i), watch.targetElement.nextSibling);
-                }
-                else {
-                    parent.appendChild(watch.buildFunc(setVal.subStores[i], i));
-                }
-            }
-        }
-    }
-    else if (watch.context === Watch.Context.ELEMENT_ATTRIBUTE) {
-        if (Util.isFalsey(setVal))
-            watch.targetElement.removeAttribute(watch.targetAttrName);
-        else
-            watch.targetElement.setAttribute(watch.targetAttrName, setVal);
-    }
-    else if (watch.context === Watch.Context.ELEMENT_PROPERTY) {
-        watch.targetElement[watch.targetPropName] = setVal;
-    }
-    else if (watch.context === Watch.Context.ELEMENT_STYLE_PROPERTY) {
-        watch.targetElement.style[watch.targetStylePropName] = setVal;
-    }
-    else if (watch.context === Watch.Context.ELEMENT_CLASS_LIST) {
-        if (setVal instanceof ArrayStore) {
-            watch.targetElement.className = "";
-            HtmlBuilder.applyClasses(watch.targetElement, setVal.array);
-        }
-    }
-}
-
-function onObjectWatchUpdate(watch, setVal) {
-    if (watch.context === Watch.Context.TEXT) {
-        watch.targetElement.nodeValue = setVal;
-    }
-    else if (watch.context === Watch.Context.ELEMENT) {
-        if (setVal instanceof Element) {
-            watch.targetElement.parentNode.replaceChild(setVal, watch.targetElement);
-            watch.targetElement = setVal;
-        }
-        else {
-            watch.targetElement.parentNode.removeChild(watch.targetElement);
-            watch.targetElement = null;
-        }
-    }
-    else if (watch.context === Watch.Context.ELEMENT_STYLE_OBJECT) {
-        if (setVal instanceof ObjectStore) {
-            HtmlBuilder.applyStyles(watch.targetElement, setVal.obj);
-        }
-    }
-    else if (watch.context === Watch.Context.ELEMENT_ATTRIBUTE_OBJECT) {
-        if (setVal instanceof ObjectStore) {
-            HtmlBuilder.applyAttrs(watch.targetElement, setVal.obj);
-        }
+        HtmlBuilder.applyElementText(elem, textVal);
     }
 }
 

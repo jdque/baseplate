@@ -61,6 +61,21 @@ window.onload = function () {
         ('/div');
     }
 
+    var hello = (function () {
+        var store = bp.make_store({
+            value: 1
+        });
+
+        var watch = bp.obs(store, 'value');
+
+        return bp.html()
+        ('div')
+            ('div')([watch])('/div')
+            ('div')([watch])('/div')
+            ('button', {onclick: () => store.value++})(['Click me'])('/button')
+        ('/div')
+    })();
+
     function appFactory() {
         var inputChanged = function (e) {
             store.inputValue = e.target.value;
@@ -110,6 +125,7 @@ window.onload = function () {
         return bp.html()
         ('div')
             ('h1')(bp.text("Todo"))('/h1')
+            (hello)
             (list)
             (form)
             ('button', {onclick: filterDone})(bp.text("Clear done"))('/button')
