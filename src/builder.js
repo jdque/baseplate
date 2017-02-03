@@ -109,7 +109,7 @@ HtmlBuilder.applyProps = function (elem, propsObj) {
                 value.addReactor(function (setVal) {
                     HtmlBuilder.applyElementProperty(elem, name, setVal);
                 });
-                value.broadcast(value.getInitialValue());
+                value.broadcast(value.getCurrentValue());
             }
             else {
                 HtmlBuilder.applyElementProperty(elem, name, value);
@@ -127,7 +127,7 @@ HtmlBuilder.applyAttrs = function (elem, attrsObj) {
                 value.addReactor(function (setVal) {
                     HtmlBuilder.applyElementAttribute(elem, name, setVal);
                 });
-                value.broadcast(value.getInitialValue());
+                value.broadcast(value.getCurrentValue());
             }
             else {
                 HtmlBuilder.applyElementAttribute(elem, name, value);
@@ -138,7 +138,7 @@ HtmlBuilder.applyAttrs = function (elem, attrsObj) {
         attrsObj.addReactor(function (setVal) {
             HtmlBuilder.applyElementAttributeObj(elem, setVal);
         });
-        attrsObj.broadcast(attrsObj.getInitialValue());
+        attrsObj.broadcast(attrsObj.getCurrentValue());
     }
 }
 
@@ -147,7 +147,7 @@ HtmlBuilder.applyClasses = function (elem, classArray) {
         classArray.addReactor(function (setVal) {
             HtmlBuilder.applyElementClassList(elem, setVal);
         });
-        classArray.broadcast(classArray.getInitialValue());
+        classArray.broadcast(classArray.getCurrentValue());
     }
     else {
         HtmlBuilder.applyElementClassList(elem, classArray);
@@ -163,7 +163,7 @@ HtmlBuilder.applyStyles = function (elem, stylesObj) {
                 value.addReactor(function (setVal) {
                     HtmlBuilder.applyElementStyle(elem, name, setVal);
                 });
-                value.broadcast(value.getInitialValue());
+                value.broadcast(value.getCurrentValue());
             }
             else {
                 HtmlBuilder.applyElementStyle(elem, name, value);
@@ -174,7 +174,7 @@ HtmlBuilder.applyStyles = function (elem, stylesObj) {
         stylesObj.addReactor(function (setVal) {
             HtmlBuilder.applyElementStyleObj(elem, setVal);
         });
-        stylesObj.broadcast(stylesObj.getInitialValue());
+        stylesObj.broadcast(stylesObj.getCurrentValue());
     }
 }
 
@@ -262,7 +262,7 @@ HtmlBuilder.makeRepeat = function (parent, props, buildFunc) {
         watch.addReactor(function (setVal) {
             HtmlBuilder.applyRepeat(elem, setVal, buildFunc);
         });
-        watch.broadcast(watch.getInitialValue());
+        watch.broadcast(watch.getCurrentValue());
     }
     else if (dataArray instanceof Array || dataArray instanceof ArrayStore) {
         for (var i = 0; i < dataArray.length; i++) {
@@ -280,7 +280,7 @@ HtmlBuilder.makeText = function (parent, props, text) {
         watch.addReactor(function (setVal) {
             HtmlBuilder.applyElementText(elem, setVal);
         });
-        watch.broadcast(watch.getInitialValue());
+        watch.broadcast(watch.getCurrentValue());
     }
     else {
         HtmlBuilder.applyElementText(elem, textVal);

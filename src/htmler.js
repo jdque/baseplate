@@ -59,12 +59,13 @@ function bp_custom(arg) {
         var argValue = typeof arg === 'function' ? arg(parent) : arg;
         if (Watch.isObjectWatch(argValue)) {
             var watch = argValue;
-            if (watch.getInitialValue() instanceof Element) {
-                var element = parent.appendChild(watch.getInitialValue());
+            var watchValue = watch.getCurrentValue();
+            if (watchValue instanceof Element) {
+                var element = parent.appendChild(watchValue);
                 watch.addReactor(function (setVal) {
                     HtmlBuilder.applyElement(element, setVal);
                 });
-                watch.broadcast(watch.getInitialValue());
+                watch.broadcast(watchValue);
             }
         }
         else if (argValue instanceof Element) {
