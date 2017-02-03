@@ -1,21 +1,65 @@
+var ArrayStore = require('./stores').ArrayStore;
+var ObjectStore = require('./stores').ObjectStore;
+
 function Watch(propName, initialValue) {
     this.propName = propName;
     this.initialValue = initialValue; //TODO make this "current value" instead
+    this.valueType = Watch.valueTypeOf(initialValue);
     this.changeFunc = null;
     this.subWatches = [];
     this.reactors = [];
 }
 
-Watch.clone = function (oldWatch) {
-    var newWatch;
-    if (oldWatch instanceof ValueWatch)
-        newWatch = new ValueWatch(oldWatch.propName, oldWatch.initialValue);
-    else if (oldWatch instanceof ArrayWatch)
-        newWatch = new ArrayWatch(oldWatch.propName, oldWatch.initialValue);
-    else if (oldWatch instanceof ObjectWatch)
-        newWatch = new ObjectWatch(oldWatch.propName, oldWatch.initialValue);
+Watch.ValueType = {
+    PRIMITIVE: 0,
+    ARRAY: 1,
+    DICTIONARY: 2,
+    OBJECT: 3
+}
 
-    return newWatch;
+Watch.isWatch = function (any) {
+    return any instanceof Watch;
+}
+
+Watch.isPrimitiveWatch = function (any) {
+    return Watch.isWatch(any) && any.getValueType() === Watch.ValueType.PRIMITIVE;
+}
+
+Watch.isArrayWatch = function (any) {
+    return Watch.isWatch(any) && any.getValueType() === Watch.ValueType.ARRAY;
+}
+
+Watch.isDictWatch = function (any) {
+    return Watch.isWatch(any) && any.getValueType() === Watch.ValueType.DICTIONARY;
+}
+
+Watch.isObjectWatch = function (any) {
+    return Watch.isWatch(any) && any.getValueType() === Watch.ValueType.OBJECT;
+}
+
+Watch.clone = function (oldWatch) {
+    return new Watch(oldWatch.propName, oldWatch.initialValue);
+}
+
+Watch.valueTypeOf = function (value) {
+    var type = null;
+
+    if (typeof value === 'object') {
+        if (value instanceof ArrayStore) {
+            type = Watch.ValueType.ARRAY;
+        }
+        else if (value instanceof ObjectStore) {
+            type = Watch.ValueType.DICTIONARY;
+        }
+        else {
+            type = Watch.ValueType.OBJECT;
+        }
+    }
+    else {
+        type = Watch.ValueType.PRIMITIVE;
+    }
+
+    return type;
 }
 
 Watch.resolvePatternValue = function (setVal, patternSets) {
@@ -45,6 +89,7 @@ Watch.prototype.transform = function (func) {
     var newWatch = Watch.clone(this);
     newWatch.changeFunc = typeof func === 'function' ? func : null;
     newWatch.initialValue = newWatch.changeFunc(this.initialValue);
+    newWatch.valueType = Watch.valueTypeOf(newWatch.initialValue);
     this.subWatches.push(newWatch);
 
     return newWatch;
@@ -57,6 +102,7 @@ Watch.prototype.pattern = function (/*pattern sets*/) {
         return Watch.resolvePatternValue(setVal, patternSets);
     };
     newWatch.initialValue = newWatch.changeFunc(this.initialValue);
+    newWatch.valueType = Watch.valueTypeOf(newWatch.initialValue);
     this.subWatches.push(newWatch);
 
     return newWatch;
@@ -68,6 +114,7 @@ Watch.prototype.match = function (matchMap, defaultVal) {
         return Watch.resolveMatchValue(setVal, matchMap, defaultVal);
     };
     newWatch.initialValue = newWatch.changeFunc(this.initialValue);
+    newWatch.valueType = Watch.valueTypeOf(newWatch.initialValue);
     this.subWatches.push(newWatch);
 
     return newWatch;
@@ -85,17 +132,12 @@ Watch.prototype.getInitialValue = function () {
     return this.initialValue;
 }
 
-Watch.prototype.update = function (currentVal) { /*implement me*/ }
-
-function ValueWatch(propName, initialValue) {
-    Watch.apply(this, [propName, initialValue]);
+Watch.prototype.getValueType = function () {
+    return this.valueType;
 }
 
-ValueWatch.prototype = Object.create(Watch.prototype);
-
-ValueWatch.prototype.update = function (currentVal) {
-    //var oldVal = currentVal; //TODO
-    var setVal = currentVal;
+Watch.prototype.update = function (setVal) {
+    //var oldVal = setVal; //TODO
 
     if (this.changeFunc) {
         setVal = this.changeFunc(setVal);
@@ -108,69 +150,12 @@ ValueWatch.prototype.update = function (currentVal) {
     this.broadcast(setVal);
 }
 
-ValueWatch.prototype.broadcast = function (setVal) {
-    for (var i = 0; i < this.reactors.length; i++) {
-        this.reactors[i](setVal, this);
-    }
-}
-
-function ArrayWatch(propName, initialValue) {
-    Watch.apply(this, [propName, initialValue]);
-}
-
-ArrayWatch.prototype = Object.create(Watch.prototype);
-
-ArrayWatch.prototype.update = function (currentArray) {
-    //var oldArrayIds = currentArray.oldArrayIds || [];
-    var setVal = currentArray;
-
-    if (this.changeFunc) {
-        setVal = this.changeFunc(setVal);
-    }
-
-    for (var i = 0; i < this.subWatches.length; i++) {
-        this.subWatches[i].update(setVal);
-    }
-
-    this.broadcast(setVal);
-}
-
-ArrayWatch.prototype.broadcast = function (setVal) {
-    for (var i = 0; i < this.reactors.length; i++) {
-        this.reactors[i](setVal, this);
-    }
-}
-
-function ObjectWatch(propName, initialValue) {
-    Watch.apply(this, [propName, initialValue]);
-}
-
-ObjectWatch.prototype = Object.create(Watch.prototype);
-
-ObjectWatch.prototype.update = function (currentObj) {
-    //var oldObj = currentObj; //TODO
-    var setVal = currentObj;
-
-    if (this.changeFunc) {
-        setVal = this.changeFunc(setVal);
-    }
-
-    for (var i = 0; i < this.subWatches.length; i++) {
-        this.subWatches[i].update(setVal);
-    }
-
-    this.broadcast(setVal);
-}
-
-ObjectWatch.prototype.broadcast = function (setVal) {
+Watch.prototype.broadcast = function (setVal) {
     for (var i = 0; i < this.reactors.length; i++) {
         this.reactors[i](setVal, this);
     }
 }
 
 module.exports = {
-    Watch: Watch,
-    ValueWatch: ValueWatch,
-    ArrayWatch: ArrayWatch,
-    ObjectWatch: ObjectWatch
+    Watch: Watch
 };

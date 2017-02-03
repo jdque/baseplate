@@ -2,9 +2,6 @@ var Store = require('./stores').Store;
 var ArrayStore = require('./stores').ArrayStore;
 var ObjectStore = require('./stores').ObjectStore;
 var Watch = require('./watches').Watch;
-var ValueWatch = require('./watches').ValueWatch;
-var ArrayWatch = require('./watches').ArrayWatch;
-var ObjectWatch = require('./watches').ObjectWatch;
 var HtmlBuilder = require('./builder');
 
 (function () {
@@ -60,7 +57,7 @@ function bp_html() {
 function bp_custom(arg) {
     return function (parent, props) {
         var argValue = typeof arg === 'function' ? arg(parent) : arg;
-        if (argValue instanceof ObjectWatch) {
+        if (Watch.isObjectWatch(argValue)) {
             var watch = argValue;
             if (watch.getInitialValue() instanceof Element) {
                 var element = parent.appendChild(watch.getInitialValue());
@@ -159,22 +156,8 @@ function bp_obs(store, propName) {
     }
 
     var propValue = store[propName];
-    var watch = null;
-    if (typeof propValue === 'object') {
-        if (propValue instanceof ArrayStore) {
-            watch = new ArrayWatch(propName, propValue);
-        }
-        else {
-            watch = new ObjectWatch(propName, propValue);
-        }
-    }
-    else {
-        watch = new ValueWatch(propName, propValue);
-    }
-
-    if (watch) {
-        store.addWatch(watch);
-    }
+    var watch = new Watch(propName, propValue);
+    store.addWatch(watch);
 
     return watch;
 }

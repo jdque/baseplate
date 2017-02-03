@@ -3,9 +3,6 @@ var Store = require('./stores').Store;
 var ArrayStore = require('./stores').ArrayStore;
 var ObjectStore = require('./stores').ObjectStore;
 var Watch = require('./watches').Watch;
-var ValueWatch = require('./watches').ValueWatch;
-var ArrayWatch = require('./watches').ArrayWatch;
-var ObjectWatch = require('./watches').ObjectWatch;
 
 var voidTags = {
     area: true, base: true, br: true, col: true,
@@ -108,7 +105,7 @@ HtmlBuilder.applyProps = function (elem, propsObj) {
             HtmlBuilder.applyStyles(elem, value);
         }
         else {
-            if (value instanceof Watch) {
+            if (Watch.isPrimitiveWatch(value)) {
                 value.addReactor(function (setVal) {
                     HtmlBuilder.applyElementProperty(elem, name, setVal);
                 });
@@ -126,7 +123,7 @@ HtmlBuilder.applyAttrs = function (elem, attrsObj) {
     if (Util.isObjectLiteral(attrsObj)) {
         Object.keys(attrsObj).forEach(function (name) {
             var value = attrsObj[name];
-            if (value instanceof Watch) {
+            if (Watch.isPrimitiveWatch(value)) {
                 value.addReactor(function (setVal) {
                     HtmlBuilder.applyElementAttribute(elem, name, setVal);
                 });
@@ -137,7 +134,7 @@ HtmlBuilder.applyAttrs = function (elem, attrsObj) {
             }
         });
     }
-    else if (attrsObj instanceof ObjectWatch) {
+    else if (Watch.isDictWatch(attrsObj)) {
         attrsObj.addReactor(function (setVal) {
             HtmlBuilder.applyElementAttributeObj(elem, setVal);
         });
@@ -146,7 +143,7 @@ HtmlBuilder.applyAttrs = function (elem, attrsObj) {
 }
 
 HtmlBuilder.applyClasses = function (elem, classArray) {
-    if (classArray instanceof ArrayWatch) {
+    if (Watch.isArrayWatch(classArray)) {
         classArray.addReactor(function (setVal) {
             HtmlBuilder.applyElementClassList(elem, setVal);
         });
@@ -162,7 +159,7 @@ HtmlBuilder.applyStyles = function (elem, stylesObj) {
     if (Util.isObjectLiteral(stylesObj)) {
         Object.keys(stylesObj).forEach(function (name) {
             var value = stylesObj[name];
-            if (value instanceof Watch) {
+            if (Watch.isPrimitiveWatch(value)) {
                 value.addReactor(function (setVal) {
                     HtmlBuilder.applyElementStyle(elem, name, setVal);
                 });
@@ -173,7 +170,7 @@ HtmlBuilder.applyStyles = function (elem, stylesObj) {
             }
         });
     }
-    else if (stylesObj instanceof ObjectWatch) {
+    else if (Watch.isDictWatch(stylesObj)) {
         stylesObj.addReactor(function (setVal) {
             HtmlBuilder.applyElementStyleObj(elem, setVal);
         });
@@ -258,7 +255,7 @@ HtmlBuilder.applyElementClassList = function (element, classArray) {
 
 HtmlBuilder.makeRepeat = function (parent, props, buildFunc) {
     var dataArray = typeof props.data === 'function' ? props.data(parent) : props.data;
-    if (dataArray instanceof ArrayWatch) {
+    if (Watch.isArrayWatch(dataArray)) {
         var elem = parent.appendChild(document.createComment(''));
 
         var watch = dataArray;
