@@ -67,7 +67,7 @@ function bp_custom(arg) {
                 watch.addReactor(function (setVal) {
                     HtmlBuilder.applyElement(element, setVal);
                 });
-                watch.update(watch.getInitialValue());
+                watch.broadcast(watch.getInitialValue());
             }
         }
         else if (argValue instanceof Element) {
@@ -179,34 +179,6 @@ function bp_obs(store, propName) {
     return watch;
 }
 
-function bp_match(watch, usePatterns, defaultVal) {
-    var newWatch = new ValueWatch(watch.getPropName(), watch.getInitialValue()); //FIXME
-    newWatch.patternFunc = function (currentVal) {
-        var computedVal = undefined;
-        for (var i = 0; i < watch.patterns.length; i++) {
-            var pattern = watch.patterns[i];
-            for (var j = 0, keys = Object.keys(pattern); j < keys.length; j++) {
-                var name = keys[j];
-                if (usePatterns.hasOwnProperty(name)) {
-                    var matches =
-                        (typeof pattern[name] === 'function' && pattern[name](currentVal) === true) ||
-                        (pattern[name] === currentVal);
-
-                    if (matches) {
-                        computedVal = usePatterns[name];
-                        break;
-                    }
-                }
-            }
-            if (computedVal !== undefined) break;
-        }
-        return computedVal !== undefined ? computedVal : defaultVal;
-    }
-    watch.matchers.push(newWatch);
-
-    return newWatch;
-}
-
 var Htmler = {
     html: bp_html,
     custom: bp_custom,
@@ -217,8 +189,7 @@ var Htmler = {
     dynamic: bp_dynamic,
     make_updater: bp_make_updater,
     make_store: bp_make_store,
-    obs: bp_obs,
-    match: bp_match
+    obs: bp_obs
 };
 
 module.exports = Htmler;

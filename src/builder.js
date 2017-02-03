@@ -112,7 +112,7 @@ HtmlBuilder.applyProps = function (elem, propsObj) {
                 value.addReactor(function (setVal) {
                     HtmlBuilder.applyElementProperty(elem, name, setVal);
                 });
-                value.update(value.getInitialValue());
+                value.broadcast(value.getInitialValue());
             }
             else {
                 HtmlBuilder.applyElementProperty(elem, name, value);
@@ -126,11 +126,11 @@ HtmlBuilder.applyAttrs = function (elem, attrsObj) {
     if (Util.isObjectLiteral(attrsObj)) {
         Object.keys(attrsObj).forEach(function (name) {
             var value = attrsObj[name];
-            if (value instanceof ValueWatch) {
+            if (value instanceof Watch) {
                 value.addReactor(function (setVal) {
                     HtmlBuilder.applyElementAttribute(elem, name, setVal);
                 });
-                value.update(value.getInitialValue());
+                value.broadcast(value.getInitialValue());
             }
             else {
                 HtmlBuilder.applyElementAttribute(elem, name, value);
@@ -141,7 +141,7 @@ HtmlBuilder.applyAttrs = function (elem, attrsObj) {
         attrsObj.addReactor(function (setVal) {
             HtmlBuilder.applyElementAttributeObj(elem, setVal);
         });
-        attrsObj.update(attrsObj.getInitialValue());
+        attrsObj.broadcast(attrsObj.getInitialValue());
     }
 }
 
@@ -150,7 +150,7 @@ HtmlBuilder.applyClasses = function (elem, classArray) {
         classArray.addReactor(function (setVal) {
             HtmlBuilder.applyElementClassList(elem, setVal);
         });
-        classArray.update(classArray.getInitialValue());
+        classArray.broadcast(classArray.getInitialValue());
     }
     else {
         HtmlBuilder.applyElementClassList(elem, classArray);
@@ -162,11 +162,11 @@ HtmlBuilder.applyStyles = function (elem, stylesObj) {
     if (Util.isObjectLiteral(stylesObj)) {
         Object.keys(stylesObj).forEach(function (name) {
             var value = stylesObj[name];
-            if (value instanceof ValueWatch) {
+            if (value instanceof Watch) {
                 value.addReactor(function (setVal) {
                     HtmlBuilder.applyElementStyle(elem, name, setVal);
                 });
-                value.update(value.getInitialValue());
+                value.broadcast(value.getInitialValue());
             }
             else {
                 HtmlBuilder.applyElementStyle(elem, name, value);
@@ -177,7 +177,7 @@ HtmlBuilder.applyStyles = function (elem, stylesObj) {
         stylesObj.addReactor(function (setVal) {
             HtmlBuilder.applyElementStyleObj(elem, setVal);
         });
-        stylesObj.update(stylesObj.getInitialValue());
+        stylesObj.broadcast(stylesObj.getInitialValue());
     }
 }
 
@@ -265,7 +265,7 @@ HtmlBuilder.makeRepeat = function (parent, props, buildFunc) {
         watch.addReactor(function (setVal) {
             HtmlBuilder.applyRepeat(elem, setVal, buildFunc);
         });
-        watch.update(watch.getInitialValue());
+        watch.broadcast(watch.getInitialValue());
     }
     else if (dataArray instanceof Array || dataArray instanceof ArrayStore) {
         for (var i = 0; i < dataArray.length; i++) {
@@ -283,7 +283,7 @@ HtmlBuilder.makeText = function (parent, props, text) {
         watch.addReactor(function (setVal) {
             HtmlBuilder.applyElementText(elem, setVal);
         });
-        watch.update(watch.getInitialValue());
+        watch.broadcast(watch.getInitialValue());
     }
     else {
         HtmlBuilder.applyElementText(elem, textVal);
