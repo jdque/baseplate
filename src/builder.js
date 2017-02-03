@@ -1,7 +1,7 @@
 var Util = require('./util');
 var Store = require('./stores').Store;
 var ArrayStore = require('./stores').ArrayStore;
-var ObjectStore = require('./stores').ObjectStore;
+var DictStore = require('./stores').DictStore;
 var Watch = require('./watches').Watch;
 
 var voidTags = {
@@ -232,14 +232,14 @@ HtmlBuilder.applyElementStyle = function (element, styleName, styleVal) {
 }
 
 HtmlBuilder.applyElementStyleObj = function (element, styleObj) {
-    if (styleObj instanceof ObjectStore) {
-        HtmlBuilder.applyStyles(element, styleObj.obj);
+    if (styleObj instanceof DictStore) {
+        HtmlBuilder.applyStyles(element, styleObj.dict);
     }
 }
 
 HtmlBuilder.applyElementAttributeObj = function (element, attrObj) {
-    if (attrObj instanceof ObjectStore) {
-        HtmlBuilder.applyAttrs(element, attrObj.obj);
+    if (attrObj instanceof DictStore) {
+        HtmlBuilder.applyAttrs(element, attrObj.dict);
     }
 }
 

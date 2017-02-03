@@ -85,7 +85,7 @@ ArrayStore.prototype.bindItem = function (idx) {
         this.subStores[idx] = new ArrayStore(this.array[idx]);
     }
     else if (Util.isObjectLiteral(this.array[idx])) {
-        this.subStores[idx] = new ObjectStore(this.array[idx]);
+        this.subStores[idx] = new DictStore(this.array[idx]);
     }
 
     if (!this.hasOwnProperty(idx)) {
@@ -102,9 +102,9 @@ ArrayStore.prototype.bindItem = function (idx) {
                     this.subStores[idx] = val;
                     this.array[idx] = val.array;
                 }
-                else if (val instanceof ObjectStore) {
+                else if (val instanceof DictStore) {
                     this.subStores[idx] = val;
-                    this.array[idx] = val.obj;
+                    this.array[idx] = val.dict;
                 }
                 else if (val instanceof Array) {
                     //this.subStores[idx] = new ArrayStore(val, this.subStores[idx].watches);
@@ -112,8 +112,8 @@ ArrayStore.prototype.bindItem = function (idx) {
                     this.array[idx] = val;
                 }
                 else if (Util.isObjectLiteral(val)) {
-                    //this.subStores[idx] = new ObjectStore(val, this.subStores[idx].watches);
-                    this.subStores[idx].replaceObj(val);
+                    //this.subStores[idx] = new DictStore(val, this.subStores[idx].watches);
+                    this.subStores[idx].replaceDict(val);
                     this.array[idx] = val;
                 }
                 else {
@@ -157,8 +157,8 @@ ArrayStore.prototype.overrideArrayMethods = function () {
     accessors.forEach(function (func) {
         self[func] = function () {
             for (var i = 0; i < arguments.length; i++) {
-                if (arguments[i] instanceof ObjectStore) {
-                    arguments[i] = arguments[i].obj;
+                if (arguments[i] instanceof DictStore) {
+                    arguments[i] = arguments[i].dict;
                 }
                 else if (arguments[i] instanceof ArrayStore) {
                     arguments[i] = arguments[i].array;
@@ -194,33 +194,33 @@ ArrayStore.prototype.sync = function () {
     this.oldArrayIds = this.array.map(function (item) { return item != null ? item.uniqueId : null; });
 }
 
-function ObjectStore(obj, watches) {
+function DictStore(dict, watches) {
     Store.apply(this, [watches]);
-    this.obj = obj;
-    this.oldObjIds = null;
+    this.dict = dict;
+    this.oldDictIds = null;
     this.updateProps();
 }
 
-ObjectStore.prototype = Object.create(Store.prototype);
+DictStore.prototype = Object.create(Store.prototype);
 
-ObjectStore.prototype.replaceObj = function (obj) {
-    this.obj = obj;
+DictStore.prototype.replaceDict = function (dict) {
+    this.dict = dict;
     this.updateProps();
 }
 
-ObjectStore.prototype.updateProps = function () {
+DictStore.prototype.updateProps = function () {
     this.subStores = {};
-    for (key in this.obj) {
+    for (key in this.dict) {
         this.bindProp(key);
     }
 }
 
-ObjectStore.prototype.bindProp = function (key) {
-    if (this.obj[key] instanceof Array) {
-        this.subStores[key] = new ArrayStore(this.obj[key]);
+DictStore.prototype.bindProp = function (key) {
+    if (this.dict[key] instanceof Array) {
+        this.subStores[key] = new ArrayStore(this.dict[key]);
     }
-    else if (Util.isObjectLiteral(this.obj[key])) {
-        this.subStores[key] = new ObjectStore(this.obj[key]);
+    else if (Util.isObjectLiteral(this.dict[key])) {
+        this.subStores[key] = new DictStore(this.dict[key]);
     }
 
     if (!this.hasOwnProperty(key)) {
@@ -229,67 +229,67 @@ ObjectStore.prototype.bindProp = function (key) {
                 if (this.isLocked()) {
                     throw new Error("Tried to modify locked store");
                 }
-                if (!this.obj.hasOwnProperty(key)) {
+                if (!this.dict.hasOwnProperty(key)) {
                     throw new Error("Tried to set undefined property");
                 }
 
                 if (val instanceof ArrayStore) {
                     this.subStores[key] = val;
-                    this.obj[key] = val.array;
+                    this.dict[key] = val.array;
                 }
-                else if (val instanceof ObjectStore) {
+                else if (val instanceof DictStore) {
                     this.subStores[key] = val;
-                    this.obj[key] = val.obj;
+                    this.dict[key] = val.dict;
                 }
                 else if (val instanceof Array) {
                     //this.subStores[key] = new ArrayStore(val, this.subStores[key].watches);
                     this.subStores[key].replaceArray(val);
-                    this.obj[key] = val;
+                    this.dict[key] = val;
                 }
                 else if (Util.isObjectLiteral(val)) {
-                    //this.subStores[key] = new ObjectStore(val, this.subStores[key].watches);
-                    this.subStores[key].replaceObj(val);
-                    this.obj[key] = val;
+                    //this.subStores[key] = new DictStore(val, this.subStores[key].watches);
+                    this.subStores[key].replaceDict(val);
+                    this.dict[key] = val;
                 }
                 else {
-                    this.obj[key] = val;
+                    this.dict[key] = val;
                 }
 
                 window.updateStores();
             },
             get: function () {
-                return this.subStores[key] || this.obj[key];
+                return this.subStores[key] || this.dict[key];
             }
         });
     }
 }
 
-ObjectStore.prototype.didChange = function () {
-    if (this.oldObjIds === null) return true;
+DictStore.prototype.didChange = function () {
+    if (this.oldDictIds === null) return true;
 
-    for (var i = 0, keys = Object.keys(this.obj); i < keys.length; i++) {
+    for (var i = 0, keys = Object.keys(this.dict); i < keys.length; i++) {
         var key = keys[i];
         if (this[key] instanceof Store && this[key].didChange()) return true;
-        if (this.obj[key] == null) {
-            if (!(this.oldObjIds[key] == null && this.obj[key] == null)) return true;
+        if (this.dict[key] == null) {
+            if (!(this.oldDictIds[key] == null && this.dict[key] == null)) return true;
         }
         else {
-            if (this.oldObjIds[key] !== this.obj[key].uniqueId) return true;
+            if (this.oldDictIds[key] !== this.dict[key].uniqueId) return true;
         }
     }
     return false;
 }
 
-ObjectStore.prototype.sync = function () {
-    this.oldObjIds = {};
-    for (var i = 0, keys = Object.keys(this.obj); i < keys.length; i++) {
+DictStore.prototype.sync = function () {
+    this.oldDictIds = {};
+    for (var i = 0, keys = Object.keys(this.dict); i < keys.length; i++) {
         var key = keys[i];
-        this.oldObjIds[key] = this.obj[key] != null ? this.obj[key].uniqueId : null;
+        this.oldDictIds[key] = this.dict[key] != null ? this.dict[key].uniqueId : null;
     }
 }
 
 module.exports = {
     Store: Store,
     ArrayStore: ArrayStore,
-    ObjectStore: ObjectStore
+    DictStore: DictStore
 };

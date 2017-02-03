@@ -1,6 +1,7 @@
+var Util = require('./util');
 var Store = require('./stores').Store;
 var ArrayStore = require('./stores').ArrayStore;
-var ObjectStore = require('./stores').ObjectStore;
+var DictStore = require('./stores').DictStore;
 var Watch = require('./watches').Watch;
 var HtmlBuilder = require('./builder');
 
@@ -142,8 +143,8 @@ function bp_make_store(obj) {
             newStore.sync();
             stores.push(newStore);
         }
-        else {
-            newStore = new ObjectStore(obj);
+        else if (Util.isObjectLiteral(obj)) {
+            newStore = new DictStore(obj);
             newStore.sync();
             stores.push(newStore);
         }

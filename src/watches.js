@@ -1,5 +1,5 @@
 var ArrayStore = require('./stores').ArrayStore;
-var ObjectStore = require('./stores').ObjectStore;
+var DictStore = require('./stores').DictStore;
 
 function Watch(propName, initialValue) {
     this.propName = propName;
@@ -44,7 +44,7 @@ Watch.valueTypeOf = function (value) {
         if (value instanceof ArrayStore) {
             type = Watch.ValueType.ARRAY;
         }
-        else if (value instanceof ObjectStore) {
+        else if (value instanceof DictStore) {
             type = Watch.ValueType.DICTIONARY;
         }
         else {
