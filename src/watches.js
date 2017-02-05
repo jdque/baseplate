@@ -1,3 +1,4 @@
+var PrimitiveStore = require('./stores').PrimitiveStore;
 var ArrayStore = require('./stores').ArrayStore;
 var DictStore = require('./stores').DictStore;
 
@@ -46,6 +47,9 @@ Watch.valueTypeOf = function (value) {
         }
         else if (value instanceof DictStore) {
             type = Watch.ValueType.DICTIONARY;
+        }
+        else if (value instanceof PrimitiveStore) {
+            type = Watch.ValueType.PRIMITIVE;
         }
         else {
             type = Watch.ValueType.OBJECT;
@@ -131,7 +135,7 @@ Watch.prototype.getValueType = function () {
 
 Watch.prototype.update = function (setVal) {
     if (this.changeFunc) {
-        setVal = this.changeFunc(setVal);
+        setVal = this.changeFunc(setVal instanceof PrimitiveStore ? setVal.value : setVal);
     }
 
     this.currentValue = setVal;
@@ -145,6 +149,8 @@ Watch.prototype.update = function (setVal) {
 }
 
 Watch.prototype.broadcast = function (setVal) {
+    var setVal = setVal instanceof PrimitiveStore ? setVal.value : setVal; //FIXME
+
     for (var i = 0; i < this.reactors.length; i++) {
         this.reactors[i](setVal, this);
     }

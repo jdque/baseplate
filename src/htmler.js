@@ -1,5 +1,6 @@
 var Util = require('./util');
 var Store = require('./stores').Store;
+var PrimitiveStore = require('./stores').PrimitiveStore;
 var ArrayStore = require('./stores').ArrayStore;
 var DictStore = require('./stores').DictStore;
 var Watch = require('./watches').Watch;
@@ -157,9 +158,10 @@ function bp_obs(store, propName) {
         return null;
     }
 
-    var propValue = store[propName];
-    var watch = new Watch(propName, propValue);
-    store.addWatch(watch);
+    var initialValue = store[propName];
+    var watch = new Watch(propName, initialValue);
+    var subStore = store.subStores[propName];
+    subStore.addWatch(watch);
 
     return watch;
 }

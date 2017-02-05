@@ -18,6 +18,8 @@ Store.prototype.isLocked = function () {
     return this.locked;
 }
 
+Store.prototype.getValue = function () { /*implement me*/ }
+
 Store.prototype.didChange = function () { /*implement me*/ }
 
 Store.prototype.sync = function () { /*implement me*/ }
@@ -45,7 +47,8 @@ Store.prototype.updateWatches = function (force) {
 
     if (this.didChange() || force) {
         for (var i = 0; i < this.watches.length; i++) {
-            var withValue = this[this.watches[i].getPropName()];
+            //var withValue = this[this.watches[i].getPropName()];
+            var withValue = this;
             this.watches[i].update(withValue);
         }
         this.sync();
@@ -56,6 +59,35 @@ Store.prototype.updateWatches = function (force) {
     }
 
     this.unlock();
+}
+
+function PrimitiveStore(value, watches) {
+    Store.apply(this, [watches]);
+    this.value = value;
+    this.oldValue = null;
+}
+
+PrimitiveStore.prototype = Object.create(Store.prototype);
+
+PrimitiveStore.prototype.replaceValue = function (value) {
+    if (value instanceof Store) {
+        this.value = value.getValue();
+    }
+    else {
+        this.value = value;
+    }
+}
+
+PrimitiveStore.prototype.getValue = function () {
+    return this.value;
+}
+
+PrimitiveStore.prototype.didChange = function () {
+    return this.oldValue === null || this.value !== this.oldValue;
+}
+
+PrimitiveStore.prototype.sync = function () {
+    this.oldValue = this.value;
 }
 
 function ArrayStore(array, watches) {
@@ -69,25 +101,38 @@ function ArrayStore(array, watches) {
 ArrayStore.prototype = Object.create(Store.prototype);
 
 ArrayStore.prototype.replaceArray = function (array) {
-    this.array = array;
+    this.array = [];
+    for (var i = 0; i < array.length; i++) {
+        if (array[i] instanceof Store) {
+            this.array.push(array[i].getValue());
+        }
+        else {
+            this.array.push(array[i]);
+        }
+    }
     this.updateItems();
 }
 
 ArrayStore.prototype.updateItems = function () {
-    this.subStores = {};
-    for (var i = 0; i < this.array.length; i++) {
-        this.bindItem(i);
+    var newSubStores = {};
+    for (var idx = 0; idx < this.array.length; idx++) {
+        var oldWatches = this.subStores[idx] ? this.subStores[idx].watches : [];
+        if (this.array[idx] instanceof Array) {
+            newSubStores[idx] = new ArrayStore(this.array[idx], oldWatches);
+        }
+        else if (Util.isObjectLiteral(this.array[idx])) {
+            newSubStores[idx] = new DictStore(this.array[idx], oldWatches);
+        }
+        else {
+            newSubStores[idx] = new PrimitiveStore(this.array[idx], oldWatches);
+        }
+        this.bindItem(idx);
     }
+
+    this.subStores = newSubStores;
 }
 
 ArrayStore.prototype.bindItem = function (idx) {
-    if (this.array[idx] instanceof Array) {
-        this.subStores[idx] = new ArrayStore(this.array[idx]);
-    }
-    else if (Util.isObjectLiteral(this.array[idx])) {
-        this.subStores[idx] = new DictStore(this.array[idx]);
-    }
-
     if (!this.hasOwnProperty(idx)) {
         Object.defineProperty(this, idx, {
             set: function (val) {
@@ -106,6 +151,10 @@ ArrayStore.prototype.bindItem = function (idx) {
                     this.subStores[idx] = val;
                     this.array[idx] = val.dict;
                 }
+                else if (val instanceof PrimitiveStore) {
+                    this.subStores[idx] = val;
+                    this.array[idx] = val.value;
+                }
                 else if (val instanceof Array) {
                     //this.subStores[idx] = new ArrayStore(val, this.subStores[idx].watches);
                     this.subStores[idx].replaceArray(val);
@@ -117,13 +166,19 @@ ArrayStore.prototype.bindItem = function (idx) {
                     this.array[idx] = val;
                 }
                 else {
+                    this.subStores[idx].replaceValue(val);
                     this.array[idx] = val;
                 }
 
-                window.updateStores();
+                this.updateWatches();
             },
             get: function () {
-                return this.subStores[idx] || this.array[idx];
+                if (this.subStores[idx] instanceof PrimitiveStore) {
+                    return this.subStores[idx].value;
+                }
+                else {
+                    return this.subStores[idx];
+                }
             }
         });
     }
@@ -138,7 +193,7 @@ ArrayStore.prototype.overrideArrayMethods = function () {
         self[func] = function () {
             Array.prototype[func].apply(self.array, arguments);
             self.updateItems();
-            window.updateStores();
+            self.updateWatches();
         };
     });
 
@@ -146,8 +201,8 @@ ArrayStore.prototype.overrideArrayMethods = function () {
                      'keys', 'map', 'reduce', 'reduceRight', 'values'];
     iterators.forEach(function (func) {
         self[func] = function () {
-            var result = Array.prototype[func].apply(self.array, arguments);
-            window.updateStores();
+            var result = Array.prototype[func].apply(self, arguments);
+            self.updateWatches(true); //FIXME make it so forced update isn't necessary
             return result;
         };
     });
@@ -163,6 +218,9 @@ ArrayStore.prototype.overrideArrayMethods = function () {
                 else if (arguments[i] instanceof ArrayStore) {
                     arguments[i] = arguments[i].array;
                 }
+                else if (arguments[i] instanceof PrimitiveStore) {
+                    arguments[i] = arguments[i].value;
+                }
             }
             return Array.prototype[func].apply(self.array, arguments);
         };
@@ -171,6 +229,10 @@ ArrayStore.prototype.overrideArrayMethods = function () {
     Object.defineProperty(this, 'length', {
         get: function () { return this.array.length; }
     });
+}
+
+ArrayStore.prototype.getValue = function () {
+    return this.array;
 }
 
 ArrayStore.prototype.didChange = function () {
@@ -204,25 +266,39 @@ function DictStore(dict, watches) {
 DictStore.prototype = Object.create(Store.prototype);
 
 DictStore.prototype.replaceDict = function (dict) {
-    this.dict = dict;
+    this.dict = {};
+    for (var key in dict) {
+        if (dict[key] instanceof Store) {
+            this.dict[key] = dict[key].getValue();
+        }
+        else {
+            this.dict[key] = dict[key];
+        }
+    }
     this.updateProps();
 }
 
 DictStore.prototype.updateProps = function () {
-    this.subStores = {};
-    for (key in this.dict) {
+    var newSubStores = {};
+    for (var key in this.dict) {
+        var oldWatches = this.subStores[key] ? this.subStores[key].watches : [];
+
+        if (this.dict[key] instanceof Array) {
+            newSubStores[key] = new ArrayStore(this.dict[key], oldWatches);
+        }
+        else if (Util.isObjectLiteral(this.dict[key])) {
+            newSubStores[key] = new DictStore(this.dict[key], oldWatches);
+        }
+        else {
+            newSubStores[key] = new PrimitiveStore(this.dict[key], oldWatches);
+        }
         this.bindProp(key);
     }
+
+    this.subStores = newSubStores;
 }
 
 DictStore.prototype.bindProp = function (key) {
-    if (this.dict[key] instanceof Array) {
-        this.subStores[key] = new ArrayStore(this.dict[key]);
-    }
-    else if (Util.isObjectLiteral(this.dict[key])) {
-        this.subStores[key] = new DictStore(this.dict[key]);
-    }
-
     if (!this.hasOwnProperty(key)) {
         Object.defineProperty(this, key, {
             set: function (val) {
@@ -241,6 +317,10 @@ DictStore.prototype.bindProp = function (key) {
                     this.subStores[key] = val;
                     this.dict[key] = val.dict;
                 }
+                else if (val instanceof PrimitiveStore) {
+                    this.subStores[key] = val;
+                    this.dict[key] = val.value;
+                }
                 else if (val instanceof Array) {
                     //this.subStores[key] = new ArrayStore(val, this.subStores[key].watches);
                     this.subStores[key].replaceArray(val);
@@ -252,16 +332,26 @@ DictStore.prototype.bindProp = function (key) {
                     this.dict[key] = val;
                 }
                 else {
+                    this.subStores[key].replaceValue(val);
                     this.dict[key] = val;
                 }
 
-                window.updateStores();
+                this.updateWatches();
             },
             get: function () {
-                return this.subStores[key] || this.dict[key];
+                if (this.subStores[key] instanceof PrimitiveStore) {
+                    return this.subStores[key].value;
+                }
+                else {
+                    return this.subStores[key];
+                }
             }
         });
     }
+}
+
+DictStore.prototype.getValue = function () {
+    return this.dict;
 }
 
 DictStore.prototype.didChange = function () {
@@ -290,6 +380,7 @@ DictStore.prototype.sync = function () {
 
 module.exports = {
     Store: Store,
+    PrimitiveStore: PrimitiveStore,
     ArrayStore: ArrayStore,
     DictStore: DictStore
 };

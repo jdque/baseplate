@@ -1,5 +1,6 @@
 var Util = require('./util');
 var Store = require('./stores').Store;
+var PrimitiveStore = require('./stores').PrimitiveStore;
 var ArrayStore = require('./stores').ArrayStore;
 var DictStore = require('./stores').DictStore;
 var Watch = require('./watches').Watch;
