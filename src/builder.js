@@ -27,7 +27,7 @@ function HtmlBuilder(tag, props) {
     }
 
     //shorthand for text element
-    if (tag instanceof Array) {
+    if (Array.isArray(tag)) {
         tag.forEach(function (text) {
             HtmlBuilder.makeText(this.getCurrentElem(), props, text)
         }, this);
@@ -265,7 +265,7 @@ HtmlBuilder.makeRepeat = function (parent, props, buildFunc) {
         });
         watch.broadcast(watch.getCurrentValue());
     }
-    else if (dataArray instanceof Array || dataArray instanceof ArrayStore) {
+    else if (Array.isArray(dataArray) || dataArray instanceof ArrayStore) {
         for (var i = 0; i < dataArray.length; i++) {
             parent.appendChild(buildFunc(dataArray[i], i));
         }

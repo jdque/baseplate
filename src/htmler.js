@@ -136,21 +136,21 @@ function bp_make_updater() {
     return new Updater();
 }
 
-function bp_make_store(obj) {
-    var newStore = null;
-    if (typeof obj === 'object') {
-        if (obj instanceof Array) {
-            newStore = new ArrayStore(obj);
-            newStore.sync();
-            stores.push(newStore);
+function bp_make_store(target) {
+    var store = null;
+    if (typeof target === 'object') {
+        if (Array.isArray(target)) {
+            store = new ArrayStore(target);
+            store.sync();
+            stores.push(store);
         }
-        else if (Util.isObjectLiteral(obj)) {
-            newStore = new DictStore(obj);
-            newStore.sync();
-            stores.push(newStore);
+        else if (Util.isObjectLiteral(target)) {
+            store = new DictStore(target);
+            store.sync();
+            stores.push(store);
         }
     }
-    return newStore;
+    return store;
 }
 
 function bp_obs(store, propName) {

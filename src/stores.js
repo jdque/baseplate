@@ -123,7 +123,7 @@ ArrayStore.prototype.updateItems = function () {
 
     for (var idx = 0; idx < this.array.length; idx++) {
         var oldWatches = this.subStores[idx] ? this.subStores[idx].watches : [];
-        if (this.array[idx] instanceof Array) {
+        if (Array.isArray(this.array[idx])) {
             newSubStores[idx] = new ArrayStore(this.array[idx], oldWatches);
         }
         else if (Util.isObjectLiteral(this.array[idx])) {
@@ -265,7 +265,7 @@ DictStore.prototype.updateProps = function () {
 
     for (var key in this.dict) {
         var oldWatches = this.subStores[key] ? this.subStores[key].watches : [];
-        if (this.dict[key] instanceof Array) {
+        if (Array.isArray(this.dict[key])) {
             newSubStores[key] = new ArrayStore(this.dict[key], oldWatches);
         }
         else if (Util.isObjectLiteral(this.dict[key])) {
