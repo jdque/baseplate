@@ -3,14 +3,14 @@ var Builder = require('systemjs-builder');
 var builder = new Builder('src');
 
 builder
-.buildStatic('htmler.js', 'bin/htmler.js', {
+.buildStatic('baseplate.js', 'bin/baseplate.js', {
     config: {
         defaultJSExtensions: true,
         packages: {
         }
     },
     externals: [],
-    globalName: 'Htmler',
+    globalName: 'Baseplate',
     globalDeps: {
     },
     minify: false,

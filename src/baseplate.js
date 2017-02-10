@@ -207,7 +207,7 @@ function bp_obs(store, propName) {
     return watch;
 }
 
-var Htmler = {
+var Baseplate = {
     html: bp_html,
     custom: bp_custom,
     defer: bp_defer,
@@ -221,4 +221,4 @@ var Htmler = {
     obs: bp_obs
 };
 
-module.exports = Htmler;
+module.exports = Baseplate;

@@ -1,5 +1,5 @@
 window.onload = function () {
-    var bp = Htmler;
+    var bp = Baseplate;
 
     var styles = {
         todo: {

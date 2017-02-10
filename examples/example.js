@@ -1,11 +1,11 @@
 window.onload = function () {
-	var html = Htmler.html,
-		custom = Htmler.custom,
-		defer = Htmler.defer,
-		text = Htmler.text,
-		repeat = Htmler.repeat,
-		make_store = Htmler.make_store,
-		obs = Htmler.obs;
+	var html = Baseplate.html,
+		custom = Baseplate.custom,
+		defer = Baseplate.defer,
+		text = Baseplate.text,
+		repeat = Baseplate.repeat,
+		make_store = Baseplate.make_store,
+		obs = Baseplate.obs;
 
 	var data = {
 		name: 'Joe',
