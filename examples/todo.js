@@ -67,13 +67,50 @@ window.onload = function () {
         });
 
         var watch = bp.obs(store, 'value');
+        var watch2 = watch.transform((value) => value + " modified");
 
         return bp.html()
         ('div')
             ('div')([watch])('/div')
-            ('div')([watch])('/div')
+            ('div')([watch2])('/div')
             ('button', {onclick: () => store.value++})(['Click me'])('/button')
         ('/div')
+    })();
+
+    var stateTest = (function () {
+        var machine = bp.make_statemachine({
+            'first': function () {
+                console.log('first')
+            },
+            'middle': function () {
+                console.log('middle')
+            },
+            'last': function () {
+                console.log('last')
+            }
+        });
+
+        var html = bp.html()
+        ('div')
+            (bp.switch({
+                'first': bp.html()
+                    ('div', {onclick: () => machine.to('middle')})
+                        (['First'])
+                    ('/div'),
+                'middle': bp.html()
+                    ('div', {onclick: () => machine.to('last')})
+                        (['Middle'])
+                    ('/div'),
+                'last': bp.html()
+                    ('div', {onclick: () => machine.to('first')})
+                        (['Last'])
+                    ('/div')
+            }), {machine: machine})
+        ('/div')
+
+        machine.to('first');
+
+        return html;
     })();
 
     function appFactory() {
@@ -126,12 +163,13 @@ window.onload = function () {
         ('div')
             ('h1')(bp.text("Todo"))('/h1')
             (hello)
+            (stateTest)
             (list)
             (form)
             ('button', {onclick: filterDone})(bp.text("Clear done"))('/button')
             ('button', {onclick: function () { store.list[0].title = 'o'; }})(bp.text('Doit'))('/button')
             ('button', {onclick: function () { store.list[0] = {done: false, title: "doodad"}; }})(bp.text('Doit2'))('/button')
-            ('button', {onclick: function () {store.list.forEach(function (item) { item.done = !item.done; }); }})(bp.text('Doit3'))('/button')
+            ('button', {onclick: function () { store.list.forEach(function (item) { item.done = !item.done; }); }})(bp.text('Doit3'))('/button')
             ('br /')
             ('br /')
             (tree)

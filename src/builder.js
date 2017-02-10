@@ -189,6 +189,7 @@ HtmlBuilder.applyRepeat = function (element, dataArray, buildFunc) {
             }
         }
 
+        //FIXME - need to make substores update watches of their parent whenever they change themselves
         for (var i = dataArray.length - 1; i >= 0; i--) {
             if (element.nextSibling) {
                 parent.insertBefore(buildFunc(dataArray.subStores[i], i), element.nextSibling);

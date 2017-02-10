@@ -39,6 +39,42 @@ Updater.prototype.update = function () {
     })
 }
 
+function StateMachine(stateMap) {
+    this.stateMap = stateMap;
+    this.currentState = null;
+    this.onBeforeEnterSubs = {};
+    this.onAfterEnterSubs = {};
+
+    for (var key in stateMap) {
+        this.onBeforeEnterSubs[key] = [];
+        this.onAfterEnterSubs[key] = [];
+    }
+}
+
+StateMachine.prototype.to = function (state) {
+    if (!this.stateMap[state])
+        return;
+
+    this.currentState = state;
+    this.onBeforeEnterSubs[state].forEach(function (func) { func(); });
+    this.stateMap[state]();
+    this.onAfterEnterSubs[state].forEach(function (func) { func(); });
+}
+
+StateMachine.prototype.onBefore = function (state, func) {
+    if (!this.stateMap[state])
+        return;
+
+    this.onBeforeEnterSubs[state].push(func);
+}
+
+StateMachine.prototype.onAfter = function (state, func) {
+    if (!this.stateMap[state])
+        return;
+
+    this.onAfterEnterSubs[state].push(func);
+}
+
 window.isObserving = false;
 window.stores = [];
 
@@ -103,20 +139,21 @@ function bp_repeat(buildFunc) {
     };
 }
 
-function bp_switch(stateMap) {
+function bp_switch(buildFuncMap) {
     return function (parent, props) {
         var currentElement = document.createComment('');
         parent.appendChild(currentElement);
 
-        var to = function (key) {
-            var value = stateMap[key];
-            var element = typeof value === 'function' ? value(to) : value;
-            parent.replaceChild(element, currentElement);
-            currentElement = element;
-        }
-
-        if (props.hasOwnProperty('start')) {
-            to(props['start']);
+        var machine = props['machine']
+        if (machine instanceof StateMachine) {
+            Object.keys(buildFuncMap).forEach(function (state) {
+                machine.onAfter(state, function () {
+                    var value = buildFuncMap[state];
+                    var element = typeof value === 'function' ? value() : value;
+                    parent.replaceChild(element, currentElement);
+                    currentElement = element;
+                });
+            });
         }
     }
 }
@@ -134,6 +171,10 @@ function bp_dynamic(buildFunc) {
 
 function bp_make_updater() {
     return new Updater();
+}
+
+function bp_make_statemachine(stateMap) {
+    return new StateMachine(stateMap);
 }
 
 function bp_make_store(target) {
@@ -175,6 +216,7 @@ var Htmler = {
     switch: bp_switch,
     dynamic: bp_dynamic,
     make_updater: bp_make_updater,
+    make_statemachine: bp_make_statemachine,
     make_store: bp_make_store,
     obs: bp_obs
 };
