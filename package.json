@@ -1,8 +1,8 @@
 {
-  "name": "htmler",
+  "name": "baseplate",
   "version": "1.0.0",
   "description": "",
-  "main": "src/htmler.js",
+  "main": "src/baseplate.js",
   "directories": {
     "example": "examples",
     "test": "test"
