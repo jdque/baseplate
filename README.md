@@ -2,6 +2,13 @@
 
 Baseplate is a lightweight framework for developing dynamic web applications in the browser. It comes with 1) a syntax for defining DOM components in Javascript, and 2) observable values/collections that can be bound to DOM properties.
 
+## Installation
+
+```
+npm install
+npm run build
+```
+
 ## Components
 
 Baseplate allows you to do HTML-in-Javascript, similar to JSX and hyperscript. The difference here is the use of chained higher order functions, which basically means the code closely resembles regular HTML syntax:
